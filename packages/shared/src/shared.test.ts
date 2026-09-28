@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseEventSettings } from './event';
 import { OtpVerifySchema } from './guest';
+import { AdminLoginSchema } from './admin';
 import { publicIds, UploadCompleteSchema } from './photos';
 import {
   AccessCodeLoginSchema,
@@ -57,6 +58,14 @@ describe('access codes', () => {
     const ok = AccessCodeLoginSchema.parse({ slug: 'demo-wedding', name: 'Sara', code: 'ab7k-2mq9' });
     expect(ok.code).toBe('AB7K2MQ9');
     expect(() => AccessCodeLoginSchema.parse({ slug: 'demo-wedding', name: 'Sara', code: 'abc' })).toThrow();
+  });
+});
+
+describe('AdminLoginSchema', () => {
+  it('accepts a username or an email, case-insensitively', () => {
+    expect(AdminLoginSchema.parse({ email: ' Uniss ', password: 'x' }).email).toBe('uniss');
+    expect(AdminLoginSchema.parse({ email: 'Owner@Example.com', password: 'x' }).email).toBe('owner@example.com');
+    expect(() => AdminLoginSchema.parse({ email: 'ab', password: 'x' })).toThrow();
   });
 });
 

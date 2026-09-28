@@ -12,7 +12,8 @@ export const AdminRoleSchema = z.enum(['OWNER', 'MODERATOR']);
 export type AdminRole = z.infer<typeof AdminRoleSchema>;
 
 export const AdminLoginSchema = z.object({
-  email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email')),
+  /** Email or username (admins can be created with either). Case-insensitive. */
+  email: z.string().trim().toLowerCase().min(3, 'Enter your email or username').max(254),
   password: z.string().min(1, 'Enter your password').max(200),
 });
 export type AdminLogin = z.infer<typeof AdminLoginSchema>;

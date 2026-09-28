@@ -54,8 +54,16 @@ function PasswordStep({ onNext }: { onNext: (r: AdminLoginResult) => void }) {
       </CardHeader>
       <CardContent>
         <form className="grid gap-4" noValidate onSubmit={form.handleSubmit((d) => login.mutate(d))}>
-          <FormField id="email" label="Email" error={errors.email?.message}>
-            <Input id="email" type="email" autoComplete="username" {...form.register('email')} />
+          <FormField id="email" label="Email or username" error={errors.email?.message}>
+            <Input
+              id="email"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              {...form.register('email')}
+            />
           </FormField>
           <FormField id="password" label="Password" error={errors.password?.message}>
             <Input id="password" type="password" autoComplete="current-password" {...form.register('password')} />
