@@ -1,0 +1,114 @@
+# PRODUCTION Blueprint (paid plans): API and worker as separate always-on services.
+# Use it when going live: New → Blueprint → set "Blueprint path" to render.production.yaml.
+# Values marked `sync: false` are prompted for in the dashboard on first deploy.
+#
+# pnpm runs through npx so the build doesn't depend on corepack permissions, and
+# --production=false keeps devDependencies (tsup, prisma CLI) available while building.
+#
+# The database is Neon (not Render Postgres): DATABASE_URL is the pooled "-pooler" URL,
+# DIRECT_URL the same URL without "-pooler" (used by migrations during the API build).
+
+services:
+  - type: web
+    name: wm-api
+    runtime: node
+    plan: starter # the free plan sleeps after 15 min idle; not acceptable on the wedding day
+    region: singapore
+    buildCommand: >-
+      npx --yes pnpm@10.34.5 install --frozen-lockfile --production=false &&
+      npx --yes pnpm@10.34.5 build:api &&
+      npx --yes pnpm@10.34.5 db:deploy
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Neon pooled URL
+      - key: DIRECT_URL
+        sync: false # Neon direct URL (no "-pooler")
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: JWT_SECRET_GUEST
+        generateValue: true
+      - key: JWT_SECRET_ADMIN
+        generateValue: true # also encrypts TOTP secrets: rotating it forces 2FA re-enrolment
+      - key: OTP_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false # e.g. https://photos.example.com
+      - key: PUBLIC_WEB_URL
+        sync: false # guest-facing URL for QR codes and emails; usually same as WEB_ORIGIN
+      - key: TRUST_PROXY
+        value: '1' # set to 2 if the web app is on Netlify and proxies /api here
+      - key: MAX_UPLOAD_MB
+        value: '25'
+
+  - type: worker
+    name: wm-worker
+    runtime: node
+    plan: starter # 512 MB: keep WORKER_CONCURRENCY=1. On Standard (2 GB) raise it to 3.
+    region: singapore
+    buildCommand: >-
+      npx --yes pnpm@10.34.5 install --frozen-lockfile --production=false &&
+      npx --yes pnpm@10.34.5 build:worker
+    startCommand: node apps/worker/dist/index.js
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Neon pooled URL
+      - key: DIRECT_URL
+        sync: false # Neon direct URL (no "-pooler")
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: WORKER_CONCURRENCY
+        value: '1'
+      - key: RESEND_API_KEY
+        sync: false # "download ready" emails
+      - key: MAIL_FROM
+        sync: false
+      - key: PUBLIC_WEB_URL
+        sync: false # links to the admin panel in emails
+
+  - type: web
+    name: wm-web
+    runtime: static
+    buildCommand: >-
+      npx --yes pnpm@10.34.5 install --frozen-lockfile --production=false &&
+      npx --yes pnpm@10.34.5 build:web
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_URL
+        sync: false # e.g. https://api.photos.example.com

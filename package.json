@@ -14,6 +14,7 @@
     "build:api": "pnpm --filter @wm/db generate && pnpm --filter @wm/api build",
     "build:worker": "pnpm --filter @wm/db generate && pnpm --filter @wm/worker build",
     "build:web": "pnpm --filter @wm/web build",
+    "start:all": "node tools/start-all.mjs",
     "db:generate": "pnpm --filter @wm/db generate",
     "db:migrate": "pnpm --filter @wm/db migrate",
     "db:deploy": "pnpm --filter @wm/db deploy:migrations",

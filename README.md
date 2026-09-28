@@ -61,18 +61,23 @@ Other commands: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm 
 
 ## Deploying on Render
 
-`render.yaml` is a Blueprint: **New → Blueprint → select this repo**. The database is Neon
-(set `DATABASE_URL` to the pooled URL and `DIRECT_URL` to the same URL without `-pooler`;
-Postgres also holds the job queue and rate limits, so there is no Redis). The Blueprint creates:
+The database is Neon: set `DATABASE_URL` to the pooled URL and `DIRECT_URL` to the same URL
+without `-pooler`. Postgres also holds the job queue and rate limits, so there is no Redis.
+There are two Blueprints (**New → Blueprint → select this repo**):
 
-| Service | Type | Notes |
-|---|---|---|
-| `wm-api` | Web service | Runs migrations during each build. Health check: `/api/health`. |
-| `wm-worker` | Background worker | Starter (512 MB) with `WORKER_CONCURRENCY=1`. |
-| `wm-web` | Static site | SPA rewrite and `noindex` header. |
+| File | Cost | Services | Use for |
+|---|---|---|---|
+| `render.yaml` (default) | Free, no card | `wm-app`: one free web service running API **and** worker (`tools/start-all.mjs`); website on Netlify | Testing |
+| `render.production.yaml` | ~$14/month | `wm-api` + `wm-worker` (Starter, always on), `wm-web` static site | The wedding |
 
-If you create the services by hand instead, copy the build/start commands and environment
-variables from `render.yaml`. Each app's `.env.example` lists what that service needs.
+**Free-plan limits:** the service sleeps after 15 minutes without traffic, and the first visit
+after that waits about 50 seconds for it to wake up. Photo processing pauses while it sleeps,
+and 512 MB of memory is shared by the API and the photo processing. Switch to the production
+Blueprint (in the Blueprint form, set the path to `render.production.yaml`) about a week before
+the event.
+
+Both run migrations during the build and use `/api/health` as the health check. Each app's
+`.env.example` lists what a service needs if you create services by hand.
 
 ### Domain (important)
 
