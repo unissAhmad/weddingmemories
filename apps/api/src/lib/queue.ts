@@ -1,5 +1,5 @@
 import PgBoss from 'pg-boss';
-import { QUEUES, QUEUE_DEFINITIONS, type PhotoProcessJob, type ZipBuildJob } from '@wm/shared';
+import { QUEUES, QUEUE_DEFINITIONS, type PhotoProcessJob } from '@wm/shared';
 import { env } from '../env';
 import { logger } from './logger';
 
@@ -43,11 +43,6 @@ export function startQueue() {
 
 export async function stopQueue() {
   if (started) await boss.stop({ graceful: true });
-}
-
-export async function enqueueZipBuild(data: ZipBuildJob) {
-  const b = await startQueue();
-  await b.send(QUEUES.zipBuild, data);
 }
 
 export async function enqueuePhotoProcess(data: PhotoProcessJob) {

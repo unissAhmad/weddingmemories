@@ -1,8 +1,8 @@
-import type { AdminPhoto, AdminPhotoQuery, Page, PhotoAction } from '@wm/shared';
+import { TRANSFORMS, type AdminPhoto, type AdminPhotoQuery, type Page, type PhotoAction } from '@wm/shared';
 import type { Prisma } from '@wm/db';
 import { prisma } from '../../lib/prisma';
 import { afterCursor, newestFirst, toPage } from '../../lib/cursor';
-import { signedGetUrl } from '../../lib/r2';
+import { deliveryUrl } from '../../lib/cloudinary';
 import { audit } from '../../lib/audit';
 import type { AdminCtx } from '../../middleware/requireAdmin';
 
@@ -30,24 +30,25 @@ export async function listPhotos(eventId: string, query: AdminPhotoQuery): Promi
   });
 
   const { page, nextCursor } = toPage(rows, query.limit);
-  const items = await Promise.all(
-    page.map(async (p) => ({
+  const items = page.map((p) => {
+    const viewable = p.status !== 'FAILED';
+    return {
       id: p.id,
       status: p.status,
       featured: p.featured,
       width: p.width,
       height: p.height,
       blurhash: p.blurhash,
-      thumbUrl: p.thumbKey ? await signedGetUrl(p.thumbKey) : null,
-      displayUrl: p.displayKey ? await signedGetUrl(p.displayKey) : null,
+      thumbUrl: viewable ? deliveryUrl(p.publicId, TRANSFORMS.thumb) : null,
+      displayUrl: viewable ? deliveryUrl(p.publicId, TRANSFORMS.display) : null,
       guestId: p.guestId,
       guestName: p.guest.name,
       originalName: p.originalName,
       sizeBytes: p.sizeBytes,
       takenAt: p.takenAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
-    })),
-  );
+    };
+  });
   return { items, nextCursor };
 }
 
@@ -57,10 +58,10 @@ const ACTIONS: Record<
 > = {
   hide: { where: { status: 'READY' }, data: { status: 'HIDDEN' } },
   // Only photos that finished processing can be published.
-  unhide: { where: { status: 'HIDDEN', displayKey: { not: null } }, data: { status: 'READY' } },
+  unhide: { where: { status: 'HIDDEN', width: { not: null } }, data: { status: 'READY' } },
   feature: { where: { status: { in: ['READY', 'HIDDEN'] } }, data: { featured: true } },
   unfeature: { where: {}, data: { featured: false } },
-  // Soft delete; the cleanup job purges R2 after the retention window.
+  // Soft delete; the cleanup job removes it from Cloudinary after the retention window.
   delete: {
     where: { status: { notIn: ['DELETED', 'UPLOADING'] } },
     data: { status: 'DELETED', deletedAt: new Date(), sha256: null, featured: false },

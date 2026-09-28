@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildEntries, sanitizeName, splitIntoParts, type ZipSource } from '../src/jobs/zipNames';
+import { buildEntries, sanitizeName, splitIntoParts, type ZipSource } from '../src/lib/zipNames';
 
 const photo = (id: string, guestId: string, guestName: string, size = 1): ZipSource => ({
   id,
-  originalKey: `events/e/originals/${id}.heic`,
+  publicId: `wm/events/e/originals/${id}`,
+  format: 'heic',
   sizeBytes: size,
   takenAt: new Date('2026-12-12T16:30:15Z'),
   createdAt: new Date('2026-12-12T18:00:00Z'),

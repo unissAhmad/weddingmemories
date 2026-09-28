@@ -1,6 +1,8 @@
 /**
- * Load test: N guests uploading M photos each, all at once, through the real multipart flow
- * (init → presigned part PUTs to storage → complete), then waits for the worker to finish.
+ * Load test: N guests uploading M photos each, all at once, through the real flow
+ * (init → signed upload straight to Cloudinary → complete), then waits for the worker.
+ *
+ * Every upload is a real Cloudinary upload and counts towards your plan's credits.
  *
  *   pnpm --filter @wm/api loadtest -- --api https://api.staging.example.com --users 100 --photos 3
  *
@@ -11,7 +13,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
-import { CSRF_HEADER, UPLOAD_PART_SIZE } from '@wm/shared';
+import { CSRF_HEADER, type UploadInitResponse } from '@wm/shared';
 import { prisma } from '@wm/db';
 import { signGuestToken } from '../src/lib/jwt';
 
@@ -22,7 +24,7 @@ const { values: args } = parseArgs({
     slug: { type: 'string', default: 'demo-wedding' },
     users: { type: 'string', default: '100' },
     photos: { type: 'string', default: '3' },
-    mb: { type: 'string', default: '4' },
+    mb: { type: 'string', default: '3' },
     'keep-data': { type: 'boolean', default: false },
   },
 });
@@ -57,23 +59,18 @@ async function call<T>(token: string, path: string, method = 'GET', body?: unkno
 
 async function uploadOne(token: string, file: Buffer, n: number) {
   const sha256 = createHash('sha256').update(file).digest('hex');
-  const init = await call<{ photoId: string }>(token, '/photos/uploads', 'POST', {
+  const init = await call<UploadInitResponse>(token, '/photos/uploads', 'POST', {
     filename: `LOAD_${n}.jpg`,
     mimeType: 'image/jpeg',
     size: file.length,
     sha256,
   });
-  const parts = [];
-  for (let p = 1; p <= Math.ceil(file.length / UPLOAD_PART_SIZE); p++) {
-    const { url } = await call<{ url: string }>(token, `/photos/${init.photoId}/parts/${p}`);
-    const put = await fetch(url, {
-      method: 'PUT',
-      body: file.subarray((p - 1) * UPLOAD_PART_SIZE, p * UPLOAD_PART_SIZE),
-    });
-    if (!put.ok) throw new Error(`part PUT → ${put.status}`);
-    parts.push({ PartNumber: p, ETag: put.headers.get('etag')! });
-  }
-  await call(token, `/photos/${init.photoId}/complete`, 'POST', { parts });
+  const form = new FormData();
+  for (const [k, v] of Object.entries(init.params)) form.append(k, v);
+  form.append('file', new Blob([new Uint8Array(file)], { type: 'image/jpeg' }), `LOAD_${n}.jpg`);
+  const up = await fetch(init.uploadUrl, { method: 'POST', body: form });
+  if (!up.ok) throw new Error(`cloudinary upload → ${up.status} ${await up.text()}`);
+  await call(token, `/photos/${init.photoId}/complete`, 'POST', await up.json());
   return init.photoId;
 }
 
@@ -138,7 +135,7 @@ async function main() {
   if (errors.length) console.log(`first errors:\n  ${[...new Set(errors)].slice(0, 5).join('\n  ')}`);
 
   if (!args['keep-data']) {
-    // Hand the test photos to the cleanup job (purges storage within ~15 min) and block the guests.
+    // Hand the test photos to the cleanup job (deletes them from Cloudinary within ~15 min).
     await prisma.photo.updateMany({
       where: { id: { in: photoIds } },
       data: { status: 'DELETED', sha256: null, deletedAt: new Date(0) },

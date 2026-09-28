@@ -1,19 +1,24 @@
 import type PgBoss from 'pg-boss';
-import { Prisma, prisma } from '@wm/db';
-import { parseEventSettings, r2Keys, type PhotoProcessJob } from '@wm/shared';
-import { deleteObject, getObjectBuffer, putObject } from '../lib/r2';
-import { processImage, sha256 } from '../lib/image';
+import { prisma } from '@wm/db';
+import { TRANSFORMS, parseEventSettings, type PhotoProcessJob } from '@wm/shared';
+import { deliveryUrl } from '../lib/cloudinary';
+import { blurhashFromImage, parseRenditionInfo } from '../lib/image';
 import { logger } from '../lib/logger';
 
-async function discardDuplicate(photo: { id: string; originalKey: string }, duplicateOf: string) {
-  await prisma.photo.update({
-    where: { id: photo.id },
-    data: { status: 'DELETED', deletedAt: new Date(), sha256: null },
-  });
-  await deleteObject(photo.originalKey);
-  logger.info({ photoId: photo.id, duplicateOf }, 'duplicate photo discarded');
+class MissingAssetError extends Error {}
+
+async function fetchOk(url: string) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404) throw new MissingAssetError(`Asset not found: ${url.split('?')[0]}`);
+  if (!res.ok) throw new Error(`Cloudinary responded ${res.status} for ${url.split('?')[0]}`);
+  return res;
 }
 
+/**
+ * Cloudinary already stores the original and renders every size on demand (converting HEIC,
+ * applying EXIF rotation, stripping metadata). All that's left is to record the display size
+ * for the gallery layout and a blurhash placeholder, then publish.
+ */
 export async function processPhoto({ photoId }: PhotoProcessJob) {
   const photo = await prisma.photo.findUnique({ where: { id: photoId }, include: { event: true } });
   if (!photo || photo.status !== 'PROCESSING') {
@@ -21,55 +26,26 @@ export async function processPhoto({ photoId }: PhotoProcessJob) {
     return;
   }
 
-  const original = await getObjectBuffer(photo.originalKey);
-
-  // The browser sends its own hash at upload time; trust only what we compute here.
-  const hash = sha256(original);
-  if (hash !== photo.sha256) {
-    const dup = await prisma.photo.findFirst({
-      where: { eventId: photo.eventId, sha256: hash, id: { not: photo.id } },
-      select: { id: true },
-    });
-    if (dup) return discardDuplicate(photo, dup.id);
-  }
-
-  const image = await processImage(original);
-
-  const displayKey = r2Keys.display(photo.eventId, photo.id);
-  const thumbKey = r2Keys.thumb(photo.eventId, photo.id);
-  await Promise.all([
-    putObject(displayKey, image.display.data, 'image/webp'),
-    putObject(thumbKey, image.thumb.data, 'image/webp'),
+  const [info, tiny] = await Promise.all([
+    fetchOk(deliveryUrl(photo.publicId, TRANSFORMS.displayInfo)).then((r) => r.json()),
+    fetchOk(deliveryUrl(photo.publicId, TRANSFORMS.tiny)).then(async (r) => Buffer.from(await r.arrayBuffer())),
   ]);
 
+  const size = parseRenditionInfo(info);
+  const blurhash = await blurhashFromImage(tiny);
   const settings = parseEventSettings(photo.event.settings);
-  try {
-    await prisma.photo.update({
-      where: { id: photo.id },
-      data: {
-        sha256: hash,
-        displayKey,
-        thumbKey,
-        blurhash: image.blurhash,
-        width: image.display.width,
-        height: image.display.height,
-        takenAt: image.takenAt,
-        status: settings.moderateBeforePublish ? 'HIDDEN' : 'READY',
-      },
-    });
-  } catch (err) {
-    // Another photo claimed this hash between our check and the update.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      await Promise.all([deleteObject(displayKey), deleteObject(thumbKey)]);
-      return discardDuplicate(photo, 'concurrent');
-    }
-    throw err;
-  }
 
-  logger.info(
-    { photoId, width: image.display.width, height: image.display.height },
-    'photo processed',
-  );
+  await prisma.photo.update({
+    where: { id: photo.id },
+    data: {
+      width: size?.width ?? null,
+      height: size?.height ?? null,
+      blurhash,
+      status: settings.moderateBeforePublish ? 'HIDDEN' : 'READY',
+    },
+  });
+
+  logger.info({ photoId, ...size }, 'photo processed');
 }
 
 /** pg-boss handler: retries on error, then marks the photo FAILED after the last attempt. */
@@ -78,7 +54,8 @@ export async function handleProcessPhoto(jobs: PgBoss.JobWithMetadata<PhotoProce
     try {
       await processPhoto(job.data);
     } catch (err) {
-      const finalAttempt = job.retryCount >= job.retryLimit;
+      // A missing asset won't appear on retry; anything else (network, 5xx) might.
+      const finalAttempt = err instanceof MissingAssetError || job.retryCount >= job.retryLimit;
       logger.error(
         { err, photoId: job.data.photoId, attempt: job.retryCount + 1, finalAttempt },
         'photo processing failed',

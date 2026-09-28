@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ImageUp, KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import type { AdminEventDetail, UpdateEvent } from '@wm/shared';
+import type { AdminEventDetail, CoverUploadResponse, UpdateEvent } from '@wm/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -212,13 +212,16 @@ function CoverCard() {
     setBusy(true);
     try {
       const blob = await resizeForCover(file);
-      const { key, url } = await api<{ key: string; url: string }>(`${base}/cover`, {
+      const signed = await api<CoverUploadResponse>(`${base}/cover`, {
         method: 'POST',
         body: { mimeType: 'image/jpeg', size: blob.size },
       });
-      const put = await fetch(url, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
-      if (!put.ok) throw new Error('Upload failed. Please try again.');
-      await update.mutateAsync({ coverKey: key });
+      const form = new FormData();
+      for (const [k, v] of Object.entries(signed.params)) form.append(k, v);
+      form.append('file', blob, 'cover.jpg');
+      const res = await fetch(signed.uploadUrl, { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Upload failed. Please try again.');
+      await update.mutateAsync({ coverPublicId: signed.publicId });
       toast.success('Cover updated');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -258,7 +261,7 @@ function CoverCard() {
             {event.coverUrl ? 'Replace' : 'Upload'}
           </Button>
           {event.coverUrl && (
-            <Button variant="ghost" onClick={() => update.mutate({ coverKey: null })} disabled={busy || update.isPending}>
+            <Button variant="ghost" onClick={() => update.mutate({ coverPublicId: null })} disabled={busy || update.isPending}>
               Remove
             </Button>
           )}

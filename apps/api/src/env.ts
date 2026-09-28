@@ -7,12 +7,15 @@ const EnvSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
 
-  R2_ACCOUNT_ID: z.string().min(1),
-  R2_ACCESS_KEY_ID: z.string().min(1),
-  R2_SECRET_ACCESS_KEY: z.string().min(1),
-  R2_BUCKET: z.string().min(1),
-  /** Override for local S3-compatible storage (e.g. MinIO). Defaults to the R2 endpoint. */
-  R2_ENDPOINT: z.url().optional(),
+  /** cloudinary://<api_key>:<api_secret>@<cloud_name> (Cloudinary dashboard → API Keys) */
+  CLOUDINARY_URL: z
+    .string()
+    .regex(/^cloudinary:\/\/[^:]+:[^@]+@[\w-]+$/, 'Expected cloudinary://<api_key>:<api_secret>@<cloud_name>'),
+  /** Top-level Cloudinary folder, so dev and production uploads never mix. */
+  CLOUDINARY_FOLDER: z
+    .string()
+    .regex(/^[\w-]+$/)
+    .default('wedding-memories'),
 
   JWT_SECRET_GUEST: z.string().min(32),
   JWT_SECRET_ADMIN: z.string().min(32),
@@ -29,7 +32,16 @@ const EnvSchema = z.object({
   /** Number of proxy hops in front of the API (Render = 1). */
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
 
-  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(25),
+  /** Cloudinary's free plan accepts images up to 10 MB; paid plans allow 20 MB or more. */
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
+
+  /**
+   * Public URL of this API, used for ZIP download links. They must reach the API directly: a
+   * proxy in between (e.g. Netlify) would cut off long downloads. Render sets
+   * RENDER_EXTERNAL_URL automatically.
+   */
+  PUBLIC_API_URL: z.url().optional(),
+  RENDER_EXTERNAL_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -50,3 +62,5 @@ export const webOrigins = env.WEB_ORIGIN.split(',').map((o) => o.trim().replace(
 export const maxUploadBytes = env.MAX_UPLOAD_MB * 1024 * 1024;
 export const publicWebUrl = (env.PUBLIC_WEB_URL ?? webOrigins[0]!).replace(/\/$/, '');
 export const guestEventUrl = (slug: string) => `${publicWebUrl}/e/${slug}`;
+/** Empty string means "same origin as the request" (fine locally, where nothing proxies). */
+export const publicApiUrl = (env.PUBLIC_API_URL ?? env.RENDER_EXTERNAL_URL ?? '').replace(/\/$/, '');

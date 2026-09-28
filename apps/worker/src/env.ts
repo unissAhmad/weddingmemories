@@ -6,20 +6,11 @@ const EnvSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
 
-  R2_ACCOUNT_ID: z.string().min(1),
-  R2_ACCESS_KEY_ID: z.string().min(1),
-  R2_SECRET_ACCESS_KEY: z.string().min(1),
-  R2_BUCKET: z.string().min(1),
-  R2_ENDPOINT: z.url().optional(),
+  /** cloudinary://<api_key>:<api_secret>@<cloud_name> */
+  CLOUDINARY_URL: z.string().regex(/^cloudinary:\/\/[^:]+:[^@]+@[\w-]+$/),
 
-  /** Photos processed in parallel. Each can use ~300-500 MB for large phone photos. */
-  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
-
-  RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default('Wedding Memories <photos@example.com>'),
-  /** Used for links in emails; first entry of WEB_ORIGIN if not set. */
-  PUBLIC_WEB_URL: z.url().optional(),
-  WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /** Photos processed in parallel (each job is two small HTTP requests to Cloudinary). */
+  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -29,4 +20,3 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
-export const publicWebUrl = (env.PUBLIC_WEB_URL ?? env.WEB_ORIGIN.split(',')[0]!.trim()).replace(/\/$/, '');

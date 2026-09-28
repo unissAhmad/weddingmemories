@@ -9,14 +9,15 @@ datasource db {
 }
 
 model Event {
-  id        String   @id @default(cuid())
-  slug      String   @unique // used in QR URL: /e/:slug
-  name      String
-  date      DateTime
-  coverKey  String?
+  id            String   @id @default(cuid())
+  slug          String   @unique // used in QR URL: /e/:slug
+  name          String
+  date          DateTime
+  /// Cloudinary public_id of the cover image
+  coverPublicId String?
   /// Parsed with EventSettingsSchema from @wm/shared
-  settings  Json     @default("{}")
-  createdAt DateTime @default(now())
+  settings      Json     @default("{}")
+  createdAt     DateTime @default(now())
 
   guests       Guest[]
   photos       Photo[]
@@ -102,12 +103,11 @@ model Photo {
   id           String      @id @default(cuid())
   eventId      String
   guestId      String
-  originalKey  String
-  /// S3 multipart upload id while status = UPLOADING
-  uploadId     String?
+  /// Cloudinary public_id of the original (stored as an "authenticated" asset)
+  publicId     String
+  /// Original file format reported by Cloudinary (jpg, heic, png, ...)
+  format       String?
   originalName String?
-  displayKey   String?
-  thumbKey     String?
   blurhash     String?
   width        Int?
   height       Int?
@@ -136,7 +136,7 @@ enum AdminRole {
 }
 
 model Admin {
-  id           String    @id @default(cuid())
+  id            String    @id @default(cuid())
   email         String    @unique
   passwordHash  String
   /// AES-GCM encrypted with a key derived from JWT_SECRET_ADMIN
@@ -161,27 +161,16 @@ model EventAdmin {
   @@id([adminId, eventId])
 }
 
-enum JobStatus {
-  QUEUED
-  RUNNING
-  DONE
-  FAILED
-}
-
+/// A download request: a snapshot of photo ids, streamed as ZIP parts on demand.
 model DownloadJob {
   id          String    @id @default(cuid())
   eventId     String
   requestedBy String
   /// { type: "all" | "guest" | "selection", guestId?, photoIds? }
   scope       Json
-  status      JobStatus @default(QUEUED)
-  /// One key per ZIP part (split at ~2 GB)
-  zipKeys     String[]
+  photoIds    String[]
   photoCount  Int       @default(0)
-  doneCount   Int       @default(0)
   totalBytes  BigInt    @default(0)
-  error       String?
-  finishedAt  DateTime?
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())
 

@@ -11,6 +11,14 @@ export const notFoundHandler: RequestHandler = (_req, res) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  // A streamed response (ZIP download) already started: the only honest signal left is to
+  // cut the connection so the browser reports a failed download instead of a corrupt file.
+  if (res.headersSent) {
+    req.log?.error({ err }, 'error after response started');
+    res.destroy(err instanceof Error ? err : undefined);
+    return;
+  }
+
   let status = 500;
   let body: ApiErrorBody = {
     error: { code: 'INTERNAL', message: 'Something went wrong. Please try again.' },

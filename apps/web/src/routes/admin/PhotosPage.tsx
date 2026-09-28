@@ -106,7 +106,7 @@ export function PhotosPage() {
     mutationFn: (photoIds: string[]) =>
       api(`${base}/downloads`, { method: 'POST', body: { scope: { type: 'selection', photoIds } } }),
     onSuccess: () => {
-      toast.success('Preparing your ZIP. It will appear under Downloads and be emailed to you.');
+      toast.success('Download ready: open Downloads to save the ZIP.');
       void qc.invalidateQueries({ queryKey: queryKeys.admin.downloads(event.id) });
     },
     onError: (err) => toast.error(err.message),

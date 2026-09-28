@@ -1,7 +1,7 @@
-import { parseEventSettings, type PublicEvent } from '@wm/shared';
+import { TRANSFORMS, parseEventSettings, type PublicEvent } from '@wm/shared';
 import { prisma } from '../lib/prisma';
 import { notFound } from '../lib/errors';
-import { signedGetUrl } from '../lib/r2';
+import { deliveryUrl } from '../lib/cloudinary';
 import { env } from '../env';
 
 export async function getEventBySlug(slug: string) {
@@ -23,7 +23,7 @@ export async function getPublicEvent(slug: string): Promise<PublicEvent> {
     slug: event.slug,
     name: event.name,
     date: event.date.toISOString(),
-    coverUrl: event.coverKey ? await signedGetUrl(event.coverKey) : null,
+    coverUrl: event.coverPublicId ? deliveryUrl(event.coverPublicId, TRANSFORMS.cover) : null,
     uploadsOpen: event.settings.uploadsOpen,
     maxUploadMb: env.MAX_UPLOAD_MB,
   };

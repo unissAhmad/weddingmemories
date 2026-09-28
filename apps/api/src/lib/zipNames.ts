@@ -2,7 +2,10 @@
 
 export interface ZipSource {
   id: string;
-  originalKey: string;
+  /** Cloudinary public_id of the original */
+  publicId: string;
+  /** Original file format (jpg, heic, …) used as the file extension */
+  format: string | null;
   sizeBytes: number;
   takenAt: Date | null;
   createdAt: Date;
@@ -10,7 +13,8 @@ export interface ZipSource {
 }
 
 export interface ZipEntry {
-  key: string;
+  publicId: string;
+  format: string;
   name: string;
   date: Date;
   size: number;
@@ -55,9 +59,10 @@ export function buildEntries(photos: ZipSource[]): ZipEntry[] {
       folders.set(p.guest.id, folder);
     }
     const date = p.takenAt ?? p.createdAt;
-    const ext = p.originalKey.split('.').pop() ?? 'jpg';
+    const ext = (p.format ?? 'jpg').toLowerCase();
     return {
-      key: p.originalKey,
+      publicId: p.publicId,
+      format: ext,
       name: `${folder}/${stamp(date)}_${p.id.replace(/-/g, '').slice(0, 8)}.${ext}`,
       date,
       size: p.sizeBytes,

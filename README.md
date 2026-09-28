@@ -1,13 +1,13 @@
 # Wedding Memories
 
-Guests scan a QR code, verify with an emailed code, and upload the photos they took. Photos go
-straight from the phone to Cloudflare R2 in resumable chunks; a background worker makes web-sized
-copies with all location data removed.
+Guests scan a QR code, join with an access code or their email, and upload the photos they took.
+Photos go straight from the phone to Cloudinary in resumable chunks. Cloudinary stores the
+originals privately and renders resized copies (HEIC converted, rotated, location data removed).
 
 ```
 apps/web      React + Vite: guest app (/e/:slug) and admin panel (/admin), installable PWA
-apps/api      Express API: guest + admin auth, presigned uploads, gallery, admin endpoints
-apps/worker   pg-boss jobs: photo.process, zip.build, maintenance.cleanup (every 15 min)
+apps/api      Express API: guest + admin auth, signed Cloudinary uploads, gallery, admin, ZIP streaming
+apps/worker   pg-boss jobs: photo.process (size + blurhash), maintenance.cleanup (every 15 min)
 packages/db   Prisma schema, migrations, seed
 packages/shared  zod schemas + types used by all three apps
 ```
@@ -23,19 +23,20 @@ dry run with the client.
 | Guests | Email code sign-in, resumable uploads, My uploads, gallery with masonry + lightbox + highlights |
 | Access | Two ways in: **personal access code** (name + code from the invitation, no email, gallery open at once) or **email** → request → admin approval; plus auto-approve and a shared family code |
 | Admin | Password + TOTP 2FA, access queue, photo moderation, guests, settings, cover, QR, ZIP downloads, audit log, team |
-| Jobs | Photo processing, streamed ZIPs split at ~2 GB, cleanup (purges deleted photos after 7 days, aborts stale uploads, requeues stuck photos, expires ZIPs) |
+| Storage | Cloudinary, private ("authenticated") assets; every image URL is signed for one exact size |
+| Jobs | Photo processing, ZIPs streamed on demand in ~2 GB parts, cleanup (deletes removed photos from Cloudinary after 7 days, clears abandoned uploads, requeues stuck photos) |
 
 ## Local development
 
-Requirements: Node 20.19+ and pnpm 10 (`npm i -g pnpm@10`), a Postgres database, and an R2
-bucket for development.
+Requirements: Node 20.19+ and pnpm 10 (`npm i -g pnpm@10`), a Postgres database, and a
+Cloudinary account (the free plan is fine; dev uploads go to the `wm-dev` folder).
 
 You don't need Postgres on your machine: a free Neon database, or a second Render database used only
 for development, works fine.
 
 ```bash
 pnpm install
-cp .env.example .env          # fill in DATABASE_URL, R2_*, secrets, SEED_ADMIN_PASSWORD
+cp .env.example .env          # fill in DATABASE_URL, CLOUDINARY_URL, secrets, SEED_ADMIN_PASSWORD
 pnpm db:migrate               # applies migrations
 pnpm db:seed                  # owner admin + demo event at /e/demo-wedding
 pnpm dev                      # web :5173, api :4000, worker
@@ -43,10 +44,6 @@ pnpm dev                      # web :5173, api :4000, worker
 
 Without `RESEND_API_KEY`, sign-in codes are printed in the API log instead of being emailed.
 
-**No R2 account yet?** Set `R2_ENDPOINT=http://127.0.0.1:4569`, `R2_ACCESS_KEY_ID=S3RVER`,
-`R2_SECRET_ACCESS_KEY=S3RVER`, then run `pnpm dev:local`. It starts a local S3-compatible storage
-server (files in `.dev-storage/`) alongside web, API and worker. The one thing it can't do is
-resume an interrupted upload after a reload; that needs real R2.
 
 The admin panel lives at `/admin`. Sign in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`; the
 first sign-in shows a QR code to set up an authenticator app (Google Authenticator, 1Password…).
@@ -101,30 +98,21 @@ one site and cookies work in Safari even without a custom domain.
 3. Netlify → **Add new site → Import from Git** → pick the repo (settings come from `netlify.toml`).
 4. On `wm-api` set `WEB_ORIGIN` and `PUBLIC_WEB_URL` to the Netlify URL (e.g.
    `https://aisha-omar.netlify.app`) and `TRUST_PROXY=2` (Netlify + Render proxies).
-5. Add your Netlify URL to the R2 bucket's CORS `AllowedOrigins`.
+5. ZIP download links go straight to the Render URL (a proxy would cut off long downloads);
+   Render provides that URL automatically, so there's nothing to set.
 
-### Cloudflare R2
+### Cloudinary
 
-1. Create a bucket and keep it **private** (no public access or r2.dev URL).
-2. Create an API token with *Object Read & Write* on that bucket only. That gives you
-   `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. `R2_ACCOUNT_ID` is shown on the R2 overview page.
-3. Bucket **Settings → CORS policy**:
+1. Sign up (the free plan works; it accepts images up to 10 MB, which covers phone photos
+   including iPhone HEIC; paid plans allow 20 MB+, then raise `MAX_UPLOAD_MB`).
+2. **Settings → API Keys**: copy the **API environment variable**
+   (`cloudinary://<api_key>:<api_secret>@<cloud_name>`) into `CLOUDINARY_URL`.
+3. Nothing else to configure: uploads are signed by the API and stored as *authenticated*
+   assets, so no photo can be viewed without a URL signed for one specific size. Guests only ever
+   receive thumbnail/display URLs, never the original.
 
-   ```json
-   [
-     {
-       "AllowedOrigins": ["https://photos.example.com", "http://localhost:5173"],
-       "AllowedMethods": ["GET", "PUT"],
-       "AllowedHeaders": ["*"],
-       "ExposeHeaders": ["ETag"],
-       "MaxAgeSeconds": 3600
-     }
-   ]
-   ```
-
-   `ExposeHeaders: ETag` is required: without it, multipart uploads cannot complete.
-4. **Settings → Object lifecycle rules**: add a rule that aborts incomplete multipart uploads
-   after 1 day.
+Uploads count towards Cloudinary credits (storage, transformations and bandwidth). A wedding
+with a few thousand photos fits the free plan; check **Dashboard → Usage** around the event.
 
 ### Resend
 
@@ -146,7 +134,8 @@ name per 10 minutes.
 ## Load test
 
 `apps/api/scripts/loadtest.ts` simulates many guests uploading at once through the real
-multipart flow, then waits for the worker. It creates guest sessions directly (no emails), so
+flow (signed upload to Cloudinary), then waits for the worker. Every test upload uses
+Cloudinary credits. It creates guest sessions directly (no emails), so
 it needs the **target's** `DATABASE_URL` and `JWT_SECRET_GUEST` in `.env`. Run it against
 staging, never production:
 
@@ -156,9 +145,8 @@ pnpm --filter @wm/api loadtest -- --api https://api.staging.example.com --users 
 
 Afterwards the test guests are blocked and their photos are handed to the cleanup job.
 
-Local result (100 guests × 2 photos, 2 MB each, local S3 emulator): 200/200 uploads, 0 errors,
-p95 upload 7 s. The worker is the bottleneck, at about 1 photo per second at `WORKER_CONCURRENCY=2`.
-Uploads are never blocked by processing; photos simply appear in the gallery a little later.
+Photo processing is now light (two small requests to Cloudinary per photo), so uploads and the
+gallery are limited mainly by the guests' connections.
 
 ## Wedding-day runbook
 
@@ -168,20 +156,24 @@ Uploads are never blocked by processing; photos simply appear in the gallery a l
 - **During the event:** keep **Access** open on one phone to approve guests. Most guests only
   need to upload, which never needs approval.
 - **After the event:** turn off *Uploads open*. Then, under **Downloads → Download all photos**,
-  the links arrive by email and expire after 24 hours; you can start a new download any time.
+  each ~2 GB part downloads straight away. Links work for 24 hours; you can create a new download
+  any time.
 
 ## How an upload works
 
 1. The browser hashes the file (SHA-256) and calls `POST /api/photos/uploads`. A duplicate is
    rejected here, before any bytes are sent.
-2. The API creates the `Photo` row (status `UPLOADING`) and an R2 multipart upload.
-3. Uppy uploads 5 MB parts straight to R2 using presigned URLs, retrying each part with back-off.
-   The queue is saved in IndexedDB, so a reload or a locked phone resumes where it left off.
-4. `POST /api/photos/:id/complete` checks the final size, sets status `PROCESSING`, and queues
-   `photo.process`.
-5. The worker converts HEIC, applies EXIF rotation, writes a 1600px and a 400px WebP with **no
-   metadata** (GPS is removed), computes the blurhash, and marks the photo `READY` (or `HIDDEN` when
-   moderation is on). The original is never modified.
+2. The API creates the `Photo` row (status `UPLOADING`) and returns a signed Cloudinary upload
+   (public id, authenticated delivery, allowed formats; valid for about an hour).
+3. The browser uploads straight to Cloudinary: small files in one request, larger ones in 6 MB
+   chunks, each retried with back-off. Progress is saved, so a reload or a locked phone resumes
+   from the last finished chunk.
+4. `POST /api/photos/:id/complete` checks Cloudinary's signed response, sets status `PROCESSING`,
+   and queues `photo.process`.
+5. The worker asks Cloudinary for the display size (after EXIF rotation) and a 32px rendition for
+   the blurhash, then marks the photo `READY` (or `HIDDEN` when moderation is on). Thumbnails
+   (400px) and display copies (1600px) are rendered by Cloudinary on demand as WebP/AVIF, with all
+   metadata (including GPS) stripped. The original is never modified.
 
 ## Security notes
 
@@ -193,8 +185,10 @@ Uploads are never blocked by processing; photos simply appear in the gallery a l
   only once.
 - Rate limits are keyed per email or guest. The per-IP limits are deliberately generous because
   the whole venue shares one Wi-Fi IP.
-- The API never returns URLs for originals. Only thumbnail and display derivatives get signed URLs,
-  valid for 1–1.5 hours.
+- The API never returns URLs for originals. Guests get signed URLs for the 400px and 1600px
+  renditions only; a signature covers one exact transformation, so it can't be edited into a URL
+  for the original. (Cloudinary signed URLs don't expire.) Admin ZIP downloads fetch originals
+  with short-lived private download URLs.
 - Admins: argon2 passwords, TOTP secrets encrypted at rest (AES-GCM), separate `SameSite=Strict`
   cookies scoped to `/api/admin` that last 8 hours, and a login limit of 5 attempts per 15 minutes
   per IP.

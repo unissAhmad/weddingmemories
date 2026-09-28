@@ -44,7 +44,7 @@ export function AccessPage() {
       api<{ updated: number }>(`${base}/access/decide`, { method: 'POST', body: vars }),
     onSuccess: (res, vars) => {
       toast.success(
-        `${res.updated} ${res.updated === 1 ? 'guest' : 'guests'} ${vars.status === 'APPROVED' ? 'approved and emailed' : 'declined'}`,
+        `${res.updated} ${res.updated === 1 ? 'guest' : 'guests'} ${vars.status === 'APPROVED' ? 'approved' : 'declined'}`,
       );
       selection.clear();
       void qc.invalidateQueries({ queryKey: ['admin', 'event', event.id] });

@@ -1,23 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import {
-  MIME_EXTENSIONS,
-  UPLOAD_PART_SIZE,
+  TRANSFORMS,
+  publicIds,
   type CursorQuery,
   type GalleryPhoto,
   type GalleryQuery,
   type MyPhoto,
   type Page,
+  type UploadComplete,
   type UploadInit,
   type UploadInitResponse,
-  type UploadedPart,
-  r2Keys,
 } from '@wm/shared';
 import { Prisma, prisma } from '../lib/prisma';
 import { AppError, notFound } from '../lib/errors';
-import * as storage from '../lib/r2';
+import { deliveryUrl, destroyAsset, signUpload, verifyUploadResponse } from '../lib/cloudinary';
 import { enqueuePhotoProcess } from '../lib/queue';
 import { logger } from '../lib/logger';
-import { maxUploadBytes } from '../env';
+import { env, maxUploadBytes } from '../env';
 import { afterCursor, newestFirst, toPage } from '../lib/cursor';
 import { getEventById } from './events.service';
 import { assertGalleryAccess } from './access.service';
@@ -29,12 +28,11 @@ const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 const duplicate = () =>
   new AppError(409, 'DUPLICATE_PHOTO', 'This photo has already been shared.');
 
-async function discardUpload(photo: { id: string; originalKey: string; uploadId: string | null }) {
-  if (photo.uploadId) {
-    await storage.abortMultipartUpload(photo.originalKey, photo.uploadId).catch((err) => {
-      logger.warn({ err, photoId: photo.id }, 'abort multipart failed');
-    });
-  }
+/** Removes an unfinished upload. The asset may or may not have reached Cloudinary. */
+async function discardUpload(photo: { id: string; publicId: string }) {
+  await destroyAsset(photo.publicId).catch((err) => {
+    logger.warn({ err, photoId: photo.id }, 'cloudinary destroy failed');
+  });
   await prisma.photo.delete({ where: { id: photo.id } });
 }
 
@@ -44,7 +42,7 @@ export async function initUpload(guest: GuestCtx, input: UploadInit): Promise<Up
     throw new AppError(403, 'UPLOADS_CLOSED', 'Uploads are closed for this event.');
   }
   if (input.size > maxUploadBytes) {
-    throw new AppError(413, 'VALIDATION_ERROR', `Photos must be ${maxUploadBytes / 1024 / 1024} MB or smaller.`);
+    throw new AppError(413, 'VALIDATION_ERROR', `Photos must be ${env.MAX_UPLOAD_MB} MB or smaller.`);
   }
 
   const existing = await prisma.photo.findUnique({
@@ -61,16 +59,16 @@ export async function initUpload(guest: GuestCtx, input: UploadInit): Promise<Up
   }
 
   const photoId = randomUUID();
-  const key = r2Keys.original(guest.eventId, photoId, MIME_EXTENSIONS[input.mimeType]);
+  const publicId = publicIds.original(env.CLOUDINARY_FOLDER, guest.eventId, photoId);
 
   try {
-    // The row is created first so the unique sha256 index settles races between guests.
+    // The unique sha256 index settles races between guests uploading the same file.
     await prisma.photo.create({
       data: {
         id: photoId,
         eventId: guest.eventId,
         guestId: guest.id,
-        originalKey: key,
+        publicId,
         originalName: input.filename,
         sizeBytes: input.size,
         mimeType: input.mimeType,
@@ -82,16 +80,7 @@ export async function initUpload(guest: GuestCtx, input: UploadInit): Promise<Up
     throw err;
   }
 
-  let uploadId: string;
-  try {
-    uploadId = await storage.createMultipartUpload(key, input.mimeType);
-  } catch (err) {
-    await prisma.photo.delete({ where: { id: photoId } });
-    throw err;
-  }
-  await prisma.photo.update({ where: { id: photoId }, data: { uploadId } });
-
-  return { photoId, uploadId, key };
+  return { photoId, ...signUpload(publicId) };
 }
 
 async function getOwnUpload(guest: GuestCtx, photoId: string) {
@@ -102,29 +91,19 @@ async function getOwnUpload(guest: GuestCtx, photoId: string) {
   return photo;
 }
 
-async function getActiveUpload(guest: GuestCtx, photoId: string) {
-  const photo = await getOwnUpload(guest, photoId);
-  if (photo.status !== 'UPLOADING' || !photo.uploadId) {
-    throw new AppError(409, 'CONFLICT', 'This upload is no longer in progress.');
-  }
-  return { ...photo, uploadId: photo.uploadId };
+/** EXIF "2026:12:12 16:30:15" → Date. Only used for ordering and ZIP file names. */
+function parseTakenAt(meta: Record<string, unknown> | undefined): Date | null {
+  const raw = meta?.DateTimeOriginal ?? meta?.CreateDate;
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(raw);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +m[6]!));
+  const year = d.getUTCFullYear();
+  return Number.isNaN(d.getTime()) || year < 2000 || year > 2100 ? null : d;
 }
 
-export async function signPart(guest: GuestCtx, photoId: string, partNumber: number) {
-  const photo = await getActiveUpload(guest, photoId);
-  const maxParts = Math.ceil(photo.sizeBytes / UPLOAD_PART_SIZE);
-  if (partNumber > maxParts) {
-    throw new AppError(400, 'BAD_REQUEST', 'Part number exceeds the declared file size.');
-  }
-  return { url: await storage.presignPart(photo.originalKey, photo.uploadId, partNumber) };
-}
-
-export async function listUploadedParts(guest: GuestCtx, photoId: string) {
-  const photo = await getActiveUpload(guest, photoId);
-  return storage.listParts(photo.originalKey, photo.uploadId);
-}
-
-export async function completeUpload(guest: GuestCtx, photoId: string, parts: UploadedPart[]) {
+/** Called by the browser with Cloudinary's upload response once the file is stored. */
+export async function completeUpload(guest: GuestCtx, photoId: string, result: UploadComplete) {
   const photo = await getOwnUpload(guest, photoId);
 
   // Idempotent: a retry after a dropped response just makes sure the job is queued.
@@ -132,26 +111,30 @@ export async function completeUpload(guest: GuestCtx, photoId: string, parts: Up
     await enqueuePhotoProcess({ photoId });
     return { status: photo.status };
   }
-  if (photo.status !== 'UPLOADING' || !photo.uploadId) {
+  if (photo.status !== 'UPLOADING') {
     throw new AppError(409, 'CONFLICT', 'This upload is no longer in progress.');
   }
 
-  await storage.completeMultipartUpload(photo.originalKey, photo.uploadId, parts);
+  // The signature proves Cloudinary stored exactly this asset for us.
+  if (result.public_id !== photo.publicId || !verifyUploadResponse(result.public_id, result.version, result.signature)) {
+    throw new AppError(400, 'BAD_REQUEST', 'Upload could not be verified. Please try again.');
+  }
 
-  const head = await storage.headObject(photo.originalKey);
-  const size = head.ContentLength ?? 0;
-  if (size > maxUploadBytes || size === 0) {
-    await storage.deleteObject(photo.originalKey);
-    await prisma.photo.update({
-      where: { id: photo.id },
-      data: { status: 'FAILED', sha256: null, uploadId: null },
-    });
-    throw new AppError(413, 'VALIDATION_ERROR', 'The uploaded file is too large or empty.');
+  const size = result.bytes ?? photo.sizeBytes;
+  if (size > maxUploadBytes) {
+    await destroyAsset(photo.publicId).catch(() => {});
+    await prisma.photo.update({ where: { id: photo.id }, data: { status: 'FAILED', sha256: null } });
+    throw new AppError(413, 'VALIDATION_ERROR', `Photos must be ${env.MAX_UPLOAD_MB} MB or smaller.`);
   }
 
   await prisma.photo.update({
     where: { id: photo.id },
-    data: { status: 'PROCESSING', uploadId: null, sizeBytes: size },
+    data: {
+      status: 'PROCESSING',
+      sizeBytes: size,
+      format: result.format ?? null,
+      takenAt: parseTakenAt(result.image_metadata),
+    },
   });
   await enqueuePhotoProcess({ photoId });
   return { status: 'PROCESSING' as const };
@@ -163,7 +146,7 @@ export async function abortUpload(guest: GuestCtx, photoId: string) {
   await discardUpload(photo);
 }
 
-/** Guests can remove their own photos. Soft delete; the cleanup job purges R2 later. */
+/** Guests can remove their own photos. Soft delete; the cleanup job purges Cloudinary later. */
 export async function deleteOwnPhoto(guest: GuestCtx, photoId: string) {
   const photo = await getOwnUpload(guest, photoId);
   if (photo.status === 'UPLOADING') return discardUpload(photo);
@@ -172,6 +155,9 @@ export async function deleteOwnPhoto(guest: GuestCtx, photoId: string) {
     data: { status: 'DELETED', deletedAt: new Date(), sha256: null },
   });
 }
+
+// Cloudinary renders thumbnails on demand, so a photo can be shown as soon as it's stored.
+const VIEWABLE = new Set(['PROCESSING', 'READY', 'HIDDEN']);
 
 export async function listMyPhotos(guest: GuestCtx, query: CursorQuery): Promise<Page<MyPhoto>> {
   const rows = await prisma.photo.findMany({
@@ -186,23 +172,24 @@ export async function listMyPhotos(guest: GuestCtx, query: CursorQuery): Promise
   });
 
   const { page, nextCursor } = toPage(rows, query.limit);
-  const items = await Promise.all(
-    page.map(async (p) => ({
+  const items = page.map((p) => {
+    const viewable = VIEWABLE.has(p.status);
+    return {
       id: p.id,
       status: p.status,
       width: p.width,
       height: p.height,
       blurhash: p.blurhash,
-      thumbUrl: p.thumbKey ? await storage.signedGetUrl(p.thumbKey) : null,
-      displayUrl: p.displayKey ? await storage.signedGetUrl(p.displayKey) : null,
+      thumbUrl: viewable ? deliveryUrl(p.publicId, TRANSFORMS.thumb) : null,
+      displayUrl: viewable ? deliveryUrl(p.publicId, TRANSFORMS.display) : null,
       createdAt: p.createdAt.toISOString(),
-    })),
-  );
+    };
+  });
 
   return { items, nextCursor };
 }
 
-/** The shared gallery: READY photos only, derivatives only, never originals. */
+/** The shared gallery: READY photos only, resized renditions only, never originals. */
 export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise<Page<GalleryPhoto>> {
   await assertGalleryAccess(guest);
 
@@ -219,22 +206,18 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
   });
 
   const { page, nextCursor } = toPage(rows, query.limit);
-  const items = await Promise.all(
-    page
-      .filter((p) => p.thumbKey && p.displayKey)
-      .map(async (p) => ({
-        id: p.id,
-        width: p.width ?? 1600,
-        height: p.height ?? 1200,
-        blurhash: p.blurhash,
-        thumbUrl: await storage.signedGetUrl(p.thumbKey!),
-        displayUrl: await storage.signedGetUrl(p.displayKey!),
-        guestName: p.guest.name,
-        featured: p.featured,
-        takenAt: p.takenAt?.toISOString() ?? null,
-        createdAt: p.createdAt.toISOString(),
-      })),
-  );
+  const items = page.map((p) => ({
+    id: p.id,
+    width: p.width ?? 1600,
+    height: p.height ?? 1200,
+    blurhash: p.blurhash,
+    thumbUrl: deliveryUrl(p.publicId, TRANSFORMS.thumb),
+    displayUrl: deliveryUrl(p.publicId, TRANSFORMS.display),
+    guestName: p.guest.name,
+    featured: p.featured,
+    takenAt: p.takenAt?.toISOString() ?? null,
+    createdAt: p.createdAt.toISOString(),
+  }));
 
   return { items, nextCursor };
 }

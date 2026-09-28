@@ -91,7 +91,7 @@ export function GuestsPage() {
   const download = useMutation({
     mutationFn: (guestId: string) =>
       api(`${base}/downloads`, { method: 'POST', body: { scope: { type: 'guest', guestId } } }),
-    onSuccess: () => toast.success('Preparing ZIP. See Downloads.'),
+    onSuccess: () => toast.success('Download ready: open Downloads to save the ZIP.'),
     onError: (err) => toast.error(err.message),
   });
 

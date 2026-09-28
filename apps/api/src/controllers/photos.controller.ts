@@ -4,7 +4,6 @@ import type {
   CursorQuery,
   GalleryQuery,
   PhotoIdParamsSchema,
-  SignPartParamsSchema,
   UploadComplete,
   UploadInit,
 } from '@wm/shared';
@@ -12,26 +11,14 @@ import * as photos from '../services/photos.service';
 import { currentGuest } from '../middleware/requireGuest';
 
 type IdParams = z.infer<typeof PhotoIdParamsSchema>;
-type PartParams = z.infer<typeof SignPartParamsSchema>;
 
 export const postUpload: RequestHandler = async (req, res) => {
   res.status(201).json(await photos.initUpload(currentGuest(req), req.valid.body as UploadInit));
 };
 
-export const getPartUrl: RequestHandler = async (req, res) => {
-  const { id, partNumber } = req.valid.params as PartParams;
-  res.json(await photos.signPart(currentGuest(req), id, partNumber));
-};
-
-export const getParts: RequestHandler = async (req, res) => {
-  const { id } = req.valid.params as IdParams;
-  res.json(await photos.listUploadedParts(currentGuest(req), id));
-};
-
 export const postComplete: RequestHandler = async (req, res) => {
   const { id } = req.valid.params as IdParams;
-  const { parts } = req.valid.body as UploadComplete;
-  res.json(await photos.completeUpload(currentGuest(req), id, parts));
+  res.json(await photos.completeUpload(currentGuest(req), id, req.valid.body as UploadComplete));
 };
 
 export const deleteUpload: RequestHandler = async (req, res) => {

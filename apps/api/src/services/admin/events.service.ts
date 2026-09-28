@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
 import {
+  TRANSFORMS,
   parseEventSettings,
+  publicIds,
   type AdminEventDetail,
   type AdminEventSummary,
   type CoverUpload,
@@ -12,9 +14,9 @@ import {
 import { Prisma, prisma } from '../../lib/prisma';
 import { AppError, notFound } from '../../lib/errors';
 import { hashSecret } from '../../lib/secrets';
-import { presignPut, signedGetUrl } from '../../lib/r2';
+import { deliveryUrl, signUpload } from '../../lib/cloudinary';
 import { audit } from '../../lib/audit';
-import { guestEventUrl } from '../../env';
+import { env, guestEventUrl } from '../../env';
 import type { AdminCtx } from '../../middleware/requireAdmin';
 
 const summary = (e: { id: string; slug: string; name: string; date: Date }): AdminEventSummary => ({
@@ -59,7 +61,7 @@ export async function getEventDetail(eventId: string): Promise<AdminEventDetail>
   const settings = parseEventSettings(event.settings);
   return {
     ...summary(event),
-    coverUrl: event.coverKey ? await signedGetUrl(event.coverKey) : null,
+    coverUrl: event.coverPublicId ? deliveryUrl(event.coverPublicId, TRANSFORMS.cover) : null,
     guestUrl: guestEventUrl(event.slug),
     settings: {
       uploadsOpen: settings.uploadsOpen,
@@ -74,7 +76,7 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw notFound('Event');
 
-  if (input.coverKey && !input.coverKey.startsWith(`events/${eventId}/cover/`)) {
+  if (input.coverPublicId && !input.coverPublicId.startsWith(publicIds.cover(env.CLOUDINARY_FOLDER, eventId, ''))) {
     throw new AppError(400, 'BAD_REQUEST', 'Invalid cover image');
   }
 
@@ -97,7 +99,7 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
       settings: next,
       ...(input.name !== undefined && { name: input.name }),
       ...(input.date !== undefined && { date: new Date(input.date) }),
-      ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
+      ...(input.coverPublicId !== undefined && { coverPublicId: input.coverPublicId }),
     },
   });
 
@@ -108,10 +110,10 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
   return getEventDetail(eventId);
 }
 
-export async function createCoverUpload(eventId: string, input: CoverUpload) {
-  const ext = input.mimeType.split('/')[1]!.replace('jpeg', 'jpg');
-  const key = `events/${eventId}/cover/${randomUUID()}.${ext}`;
-  return { key, url: await presignPut(key, input.mimeType) };
+/** Signed upload for a new cover image; the admin then saves the returned public id. */
+export function createCoverUpload(eventId: string, _input: CoverUpload) {
+  const publicId = publicIds.cover(env.CLOUDINARY_FOLDER, eventId, randomUUID());
+  return { publicId, ...signUpload(publicId, { formats: 'jpg,jpeg,png,webp' }) };
 }
 
 export async function getStats(eventId: string): Promise<EventStats> {

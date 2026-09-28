@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseEventSettings } from './event';
 import { OtpVerifySchema } from './guest';
-import { photoIdFromKey, r2Keys } from './photos';
+import { publicIds, UploadCompleteSchema } from './photos';
 import {
   AccessCodeLoginSchema,
   formatAccessCode,
@@ -9,13 +9,20 @@ import {
   normalizeGuestName,
 } from './accessCode';
 
-describe('photoIdFromKey', () => {
-  it('extracts the id from an original key', () => {
-    expect(photoIdFromKey(r2Keys.original('evt1', 'cm123abc', 'heic'))).toBe('cm123abc');
+describe('Cloudinary ids and upload results', () => {
+  it('builds public ids under the environment folder', () => {
+    expect(publicIds.original('wm-dev', 'evt1', 'p1')).toBe('wm-dev/events/evt1/originals/p1');
   });
 
-  it('returns null for non-original keys', () => {
-    expect(photoIdFromKey(r2Keys.thumb('evt1', 'cm123abc'))).toBeNull();
+  it('accepts Cloudinary upload responses with numeric versions', () => {
+    const parsed = UploadCompleteSchema.parse({
+      public_id: 'wm-dev/events/evt1/originals/p1',
+      version: 1727600000,
+      signature: 'abcdef0123456789abcdef0123456789abcdef01',
+      format: 'heic',
+      bytes: 2048,
+    });
+    expect(parsed.version).toBe('1727600000');
   });
 });
 

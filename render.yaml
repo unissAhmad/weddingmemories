@@ -2,7 +2,7 @@
 # The website is hosted on Netlify (netlify.toml), which proxies /api/* to this service.
 #
 # Free-plan limits: the service sleeps after 15 minutes without traffic and takes ~50 s to
-# wake; photo processing pauses while it sleeps; 512 MB memory is shared by API and worker.
+# wake; photo processing pauses while it sleeps. Photos themselves live in Cloudinary.
 # Before the wedding, switch to render.production.yaml (paid, always on).
 #
 # Values marked `sync: false` are prompted for in the dashboard on first deploy.
@@ -29,14 +29,10 @@ services:
         sync: false # Neon pooled URL (host contains "-pooler")
       - key: DIRECT_URL
         sync: false # same Neon URL without "-pooler" (used by migrations)
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET
-        sync: false
+      - key: CLOUDINARY_URL
+        sync: false # cloudinary://<api_key>:<api_secret>@<cloud_name>
+      - key: CLOUDINARY_FOLDER
+        value: wedding-memories
       - key: JWT_SECRET_GUEST
         generateValue: true
       - key: JWT_SECRET_ADMIN
@@ -54,6 +50,6 @@ services:
       - key: TRUST_PROXY
         value: '2' # Netlify proxy + Render proxy
       - key: MAX_UPLOAD_MB
-        value: '25'
+        value: '10' # Cloudinary free plan limit per image
       - key: WORKER_CONCURRENCY
-        value: '1' # 512 MB shared with the API
+        value: '4' # each job is two small requests to Cloudinary

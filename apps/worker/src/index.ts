@@ -1,10 +1,9 @@
 import PgBoss from 'pg-boss';
 import { prisma } from '@wm/db';
-import { QUEUES, QUEUE_DEFINITIONS, type PhotoProcessJob, type ZipBuildJob } from '@wm/shared';
+import { QUEUES, QUEUE_DEFINITIONS, type PhotoProcessJob } from '@wm/shared';
 import { env } from './env';
 import { logger } from './lib/logger';
 import { handleProcessPhoto } from './jobs/processPhoto';
-import { handleBuildZip } from './jobs/buildZip';
 import { runCleanup } from './jobs/cleanup';
 
 /**
@@ -40,13 +39,6 @@ async function main() {
       handleProcessPhoto,
     );
   }
-
-  // ZIPs are I/O-bound and long; one at a time keeps bandwidth for photo processing.
-  await boss.work<ZipBuildJob>(
-    QUEUES.zipBuild,
-    { batchSize: 1, includeMetadata: true, pollingIntervalSeconds: 5 },
-    handleBuildZip,
-  );
 
   await boss.schedule(QUEUES.cleanup, '*/15 * * * *');
   await boss.work(QUEUES.cleanup, { batchSize: 1 }, async () => {

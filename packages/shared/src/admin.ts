@@ -65,7 +65,7 @@ export const UpdateEventSchema = z
     moderateBeforePublish: z.boolean(),
     /** A new family code, or null to remove it. */
     familyCode: z.string().trim().min(4, 'At least 4 characters').max(64).nullable(),
-    coverKey: z.string().max(300).nullable(),
+    coverPublicId: z.string().max(300).nullable(),
   })
   .partial();
 export type UpdateEvent = z.infer<typeof UpdateEventSchema>;
@@ -90,6 +90,12 @@ export const CoverUploadSchema = z.object({
     .max(10 * 1024 * 1024),
 });
 export type CoverUpload = z.infer<typeof CoverUploadSchema>;
+
+export interface CoverUploadResponse {
+  publicId: string;
+  uploadUrl: string;
+  params: Record<string, string>;
+}
 
 export interface EventStats {
   guests: number;
@@ -215,21 +221,14 @@ export const CreateDownloadSchema = z.object({ scope: DownloadScopeSchema });
 
 export interface AdminDownloadJob {
   id: string;
-  status: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED';
   scope: DownloadScope;
   photoCount: number;
-  doneCount: number;
   totalBytes: number;
-  parts: { name: string; url: string }[];
+  /** One link per ZIP part (~2 GB each); each streams the originals when opened. */
+  parts: { name: string; url: string; photoCount: number }[];
   expired: boolean;
   expiresAt: string | null;
-  error: string | null;
   createdAt: string;
-  finishedAt: string | null;
-}
-
-export interface ZipBuildJob {
-  jobId: string;
 }
 
 /* ----------------------------------------------------------------------------

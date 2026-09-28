@@ -13,6 +13,7 @@ import { guestRouter } from './routes/guest.routes';
 import { photosRouter } from './routes/photos.routes';
 import { accessRouter } from './routes/access.routes';
 import { adminRouter } from './routes/admin.routes';
+import { downloadsRouter } from './routes/downloads.routes';
 
 export function createApp() {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp() {
   app.use('/api/photos', photosRouter);
   app.use('/api/access', accessRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/downloads', downloadsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

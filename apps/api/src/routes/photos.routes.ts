@@ -3,7 +3,6 @@ import {
   CursorQuerySchema,
   GalleryQuerySchema,
   PhotoIdParamsSchema,
-  SignPartParamsSchema,
   UploadCompleteSchema,
   UploadInitSchema,
 } from '@wm/shared';
@@ -19,10 +18,8 @@ photosRouter.use(requireGuest);
 photosRouter.get('/', validate({ query: GalleryQuerySchema }), c.getGallery);
 photosRouter.get('/mine', validate({ query: CursorQuerySchema }), c.getMine);
 
-// Multipart upload lifecycle (called by Uppy's AwsS3 plugin)
+// Upload lifecycle: sign → browser uploads to Cloudinary → complete (or abort)
 photosRouter.post('/uploads', uploadInitLimit, validate({ body: UploadInitSchema }), c.postUpload);
-photosRouter.get('/:id/parts', validate({ params: PhotoIdParamsSchema }), c.getParts);
-photosRouter.get('/:id/parts/:partNumber', validate({ params: SignPartParamsSchema }), c.getPartUrl);
 photosRouter.post(
   '/:id/complete',
   validate({ params: PhotoIdParamsSchema, body: UploadCompleteSchema }),

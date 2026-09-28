@@ -5,7 +5,6 @@ import type { AdminDownloadJob } from '@wm/shared';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { formatBytes } from '@/lib/utils';
@@ -21,14 +20,12 @@ export function DownloadsPage() {
   const jobs = useQuery({
     queryKey: queryKeys.admin.downloads(event.id),
     queryFn: ({ signal }) => api<AdminDownloadJob[]>(`${base}/downloads`, { signal }),
-    refetchInterval: (q) =>
-      q.state.data?.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING') ? 3000 : false,
   });
 
   const create = useMutation({
     mutationFn: () => api(`${base}/downloads`, { method: 'POST', body: { scope: { type: 'all' } } }),
     onSuccess: () => {
-      toast.success("Started. We'll email you the link when it's ready.");
+      toast.success('Download ready. Click each part to save it.');
       void qc.invalidateQueries({ queryKey: queryKeys.admin.downloads(event.id) });
     },
     onError: (err) => toast.error(err.message),
@@ -38,7 +35,7 @@ export function DownloadsPage() {
     <>
       <PageHeader
         title="Downloads"
-        description="Original, full-quality files in folders by guest. Large events are split into ~2 GB parts. Links last 24 hours."
+        description="Original, full-quality files in folders by guest. Large events are split into ~2 GB parts that start downloading immediately. Links last 24 hours."
         actions={
           <Button onClick={() => create.mutate()} disabled={create.isPending}>
             {create.isPending ? <Loader2 className="animate-spin" /> : <Archive />}
@@ -62,47 +59,35 @@ export function DownloadsPage() {
                 <div>
                   <p className="font-medium">{SCOPE_LABEL[j.scope.type]}</p>
                   <p className="text-xs text-muted-foreground">
-                    {j.photoCount} photos · {formatBytes(j.totalBytes)} · requested {formatDateTime(j.createdAt)}
+                    {j.photoCount} photos · {formatBytes(j.totalBytes)} · created {formatDateTime(j.createdAt)}
                   </p>
                 </div>
-                <JobBadge job={j} />
+                {j.expired ? <Badge>Expired</Badge> : <Badge variant="success">Ready</Badge>}
               </div>
-
-              {(j.status === 'RUNNING' || j.status === 'QUEUED') && (
-                <div className="grid gap-1">
-                  <Progress value={j.photoCount ? (j.doneCount / j.photoCount) * 100 : 0} />
-                  <p className="text-xs text-muted-foreground">
-                    {j.status === 'QUEUED' ? 'Waiting to start…' : `${j.doneCount} of ${j.photoCount} added`}
-                  </p>
-                </div>
-              )}
 
               {j.parts.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {j.parts.map((p) => (
                     <Button key={p.url} asChild variant="outline" size="sm">
+                      {/* Opens on the API's own domain: long downloads must not go through a proxy. */}
                       <a href={p.url} download={p.name}>
                         <Download /> {p.name}
+                        {j.parts.length > 1 && <span className="text-muted-foreground">({p.photoCount})</span>}
                       </a>
                     </Button>
                   ))}
                 </div>
               )}
-              {j.status === 'DONE' && j.expiresAt && !j.expired && (
-                <p className="text-xs text-muted-foreground">Links expire {formatDateTime(j.expiresAt)}.</p>
+              {!j.expired && j.expiresAt && (
+                <p className="text-xs text-muted-foreground">
+                  Links work until {formatDateTime(j.expiresAt)}. Each part downloads on its own; you don't
+                  need to keep this page open.
+                </p>
               )}
-              {j.error && <p className="text-sm text-destructive">{j.error}</p>}
             </CardContent>
           </Card>
         ))}
       </div>
     </>
   );
-}
-
-function JobBadge({ job }: { job: AdminDownloadJob }) {
-  if (job.status === 'DONE') return job.expired ? <Badge>Expired</Badge> : <Badge variant="success">Ready</Badge>;
-  if (job.status === 'FAILED') return <Badge variant="destructive">Failed</Badge>;
-  if (job.status === 'RUNNING') return <Badge variant="accent">Building…</Badge>;
-  return <Badge>Queued</Badge>;
 }
