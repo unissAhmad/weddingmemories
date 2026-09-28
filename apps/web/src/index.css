@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+
+/* shadcn-style theme tokens: soft ivory, espresso and champagne. */
+:root {
+  --radius: 0.75rem;
+  --background: #faf7f2;
+  --foreground: #2f2a26;
+  --card: #fffdf9;
+  --card-foreground: #2f2a26;
+  --muted: #f1ece4;
+  --muted-foreground: #7d7268;
+  --primary: #3d352e;
+  --primary-foreground: #faf7f2;
+  --secondary: #efe8dd;
+  --secondary-foreground: #3d352e;
+  --accent: #a88a5e;
+  --accent-foreground: #fffdf9;
+  --destructive: #b4463c;
+  --destructive-foreground: #fffdf9;
+  --border: #e6dfd4;
+  --input: #ddd4c7;
+  --ring: #a88a5e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-serif: 'Cormorant Garamond', 'Times New Roman', serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-serif;
+  }
+}
+
+/* PhotoSwipe caption, matching the app's type */
+.pswp__custom-caption {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.45);
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pswp__custom-caption:empty {
+  display: none;
+}
+
+/* Gentle entrance for photos appended by infinite scroll */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility animate-rise-in {
+  animation: rise-in 0.45s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in {
+    animation: none;
+  }
+}
+
+@utility eyebrow {
+  @apply text-xs font-medium tracking-[0.25em] uppercase text-muted-foreground;
+}
+
+@utility safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}

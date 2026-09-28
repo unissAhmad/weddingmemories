@@ -1,0 +1,46 @@
+{
+  "name": "wedding-memories",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "concurrently -n web,api,worker -c magenta,cyan,yellow \"pnpm --filter @wm/web dev\" \"pnpm --filter @wm/api dev\" \"pnpm --filter @wm/worker dev\"",
+    "dev:storage": "node --env-file-if-exists=.env tools/dev-storage.mjs",
+    "dev:local": "concurrently -n storage,web,api,worker -c gray,magenta,cyan,yellow \"pnpm dev:storage\" \"pnpm --filter @wm/web dev\" \"pnpm --filter @wm/api dev\" \"pnpm --filter @wm/worker dev\"",
+    "build": "pnpm --filter @wm/db generate && pnpm -r --filter ./apps/** build",
+    "build:api": "pnpm --filter @wm/db generate && pnpm --filter @wm/api build",
+    "build:worker": "pnpm --filter @wm/db generate && pnpm --filter @wm/worker build",
+    "build:web": "pnpm --filter @wm/web build",
+    "db:generate": "pnpm --filter @wm/db generate",
+    "db:migrate": "pnpm --filter @wm/db migrate",
+    "db:deploy": "pnpm --filter @wm/db deploy:migrations",
+    "db:seed": "pnpm --filter @wm/db seed",
+    "db:studio": "pnpm --filter @wm/db studio",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp",
+      "argon2",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
+    "s3rver": "^3.7.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^3.2.7"
+  }
+}

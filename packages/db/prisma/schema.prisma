@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  slug      String   @unique // used in QR URL: /e/:slug
+  name      String
+  date      DateTime
+  coverKey  String?
+  /// Parsed with EventSettingsSchema from @wm/shared
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  guests       Guest[]
+  photos       Photo[]
+  otpCodes     OtpCode[]
+  admins       EventAdmin[]
+  downloadJobs DownloadJob[]
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+  /// Created by an admin; signs in with name + personal access code, no email
+  ACCESS_CODE
+}
+
+model Guest {
+  id               String      @id @default(cuid())
+  eventId          String
+  name             String
+  /// Normalized email (lowercase) or E.164 phone number; null for access-code guests
+  contact          String?
+  contactType      ContactType @default(EMAIL)
+  /// HMAC of the normalized access code, for lookup at sign-in
+  accessCodeLookup String?
+  /// The access code, AES-GCM encrypted so admins can show it again
+  accessCodeEnc    String?
+  verifiedAt       DateTime?
+  blocked          Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+
+  event  Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  photos Photo[]
+  access AccessRequest?
+
+  @@unique([eventId, contact])
+  @@unique([eventId, accessCodeLookup])
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  eventId    String
+  target     String // normalized email or phone
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, target, createdAt])
+}
+
+enum AccessStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AccessRequest {
+  id        String       @id @default(cuid())
+  guestId   String       @unique
+  status    AccessStatus @default(PENDING)
+  decidedBy String?
+  decidedAt DateTime?
+  createdAt DateTime     @default(now())
+
+  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+enum PhotoStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  HIDDEN
+  DELETED
+  FAILED
+}
+
+model Photo {
+  id           String      @id @default(cuid())
+  eventId      String
+  guestId      String
+  originalKey  String
+  /// S3 multipart upload id while status = UPLOADING
+  uploadId     String?
+  originalName String?
+  displayKey   String?
+  thumbKey     String?
+  blurhash     String?
+  width        Int?
+  height       Int?
+  sizeBytes    Int
+  mimeType     String
+  /// Cleared when a photo is deleted or fails, so the same file can be uploaded again
+  sha256       String?
+  status       PhotoStatus @default(UPLOADING)
+  featured     Boolean     @default(false)
+  takenAt      DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, sha256]) // dedupe
+  @@index([eventId, status, createdAt])
+  @@index([guestId, createdAt])
+}
+
+enum AdminRole {
+  OWNER
+  MODERATOR
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  /// AES-GCM encrypted with a key derived from JWT_SECRET_ADMIN
+  totpSecret    String?
+  /// Set once the admin has confirmed their authenticator app
+  totpEnabledAt DateTime?
+  /// OWNER sees every event; MODERATOR only events linked through EventAdmin
+  role          AdminRole @default(MODERATOR)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  events EventAdmin[]
+}
+
+model EventAdmin {
+  adminId String
+  eventId String
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([adminId, eventId])
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+model DownloadJob {
+  id          String    @id @default(cuid())
+  eventId     String
+  requestedBy String
+  /// { type: "all" | "guest" | "selection", guestId?, photoIds? }
+  scope       Json
+  status      JobStatus @default(QUEUED)
+  /// One key per ZIP part (split at ~2 GB)
+  zipKeys     String[]
+  photoCount  Int       @default(0)
+  doneCount   Int       @default(0)
+  totalBytes  BigInt    @default(0)
+  error       String?
+  finishedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  eventId   String?
+  action    String
+  targetId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([eventId, createdAt])
+}
+
+/// Fixed-window counters backing express-rate-limit (no Redis).
+model RateLimitHit {
+  key     String   @id
+  hits    Int
+  resetAt DateTime
+}

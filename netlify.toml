@@ -1,0 +1,47 @@
+# Netlify hosts the web app only. The API and worker run on Render (see render.yaml).
+#
+# /api/* is proxied to the Render API, so the browser sees one site: session cookies are
+# first-party (works in Safari without a custom domain) and no CORS is involved.
+# Set API_ORIGIN below to your Render API URL, e.g. https://wm-api.onrender.com
+
+[build]
+  base = ""
+  command = "pnpm build:web"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Relative API URL: requests go to /api on this site and are proxied to Render.
+  VITE_API_URL = ""
+
+# Proxy the API. Must come before the SPA fallback.
+[[redirects]]
+  from = "/api/*"
+  to = "https://wm-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Single-page app: every other path serves index.html (React Router handles it).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Hashed build assets never change.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The service worker must always be re-checked so new deploys reach guests.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
