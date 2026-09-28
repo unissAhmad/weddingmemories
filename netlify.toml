@@ -18,7 +18,7 @@
 # Proxy the API. Must come before the SPA fallback.
 [[redirects]]
   from = "/api/*"
-  to = "https://wm-app.onrender.com/api/:splat"
+  to = "https://wm-app-m7sj.onrender.com/api/:splat"
   status = 200
   force = true
 
