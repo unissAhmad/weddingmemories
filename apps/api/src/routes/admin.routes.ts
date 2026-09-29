@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import {
   AccessDecisionSchema,
+  AdminCommentParamsSchema,
+  AdminPhotoParamsSchema,
   AccessListQuerySchema,
   AdminIdParamsSchema,
   AdminLoginSchema,
@@ -82,6 +84,8 @@ event.post('/access/decide', validate({ body: AccessDecisionSchema }), c.postAcc
 
 event.get('/photos', validate({ query: AdminPhotoQuerySchema }), c.getPhotos);
 event.post('/photos/actions', validate({ body: PhotoActionSchema }), c.postPhotoAction);
+event.get('/photos/:photoId/comments', validate({ params: AdminPhotoParamsSchema }), c.getPhotoComments);
+event.delete('/comments/:commentId', validate({ params: AdminCommentParamsSchema }), c.deletePhotoComment);
 
 event.get('/guests', validate({ query: GuestListQuerySchema }), c.getGuests);
 event.post('/guests', validate({ body: CreateCodeGuestsSchema }), c.postCodeGuests);

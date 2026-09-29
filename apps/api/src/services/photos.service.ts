@@ -20,6 +20,7 @@ import { env, maxUploadBytes } from '../env';
 import { afterCursor, newestFirst, toPage } from '../lib/cursor';
 import { getEventById } from './events.service';
 import { assertGalleryAccess } from './access.service';
+import { visibleGuest } from './social.service';
 
 type GuestCtx = { id: string; eventId: string };
 
@@ -202,7 +203,11 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
     },
     orderBy: newestFirst,
     take: query.limit + 1,
-    include: { guest: { select: { name: true } } },
+    include: {
+      guest: { select: { name: true } },
+      _count: { select: { likes: { where: visibleGuest }, comments: { where: visibleGuest } } },
+      likes: { where: { guestId: guest.id }, select: { guestId: true }, take: 1 },
+    },
   });
 
   const { page, nextCursor } = toPage(rows, query.limit);
@@ -215,6 +220,9 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
     displayUrl: deliveryUrl(p.publicId, TRANSFORMS.display),
     guestName: p.guest.name,
     featured: p.featured,
+    likeCount: p._count.likes,
+    commentCount: p._count.comments,
+    likedByMe: p.likes.length > 0,
     takenAt: p.takenAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
   }));

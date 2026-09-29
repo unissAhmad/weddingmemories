@@ -126,6 +126,20 @@ export const accessCodeLoginLimits = [
   }),
 ];
 
+export const likeLimit = limiter('like', {
+  windowMinutes: 10,
+  limit: 300,
+  key: (req) => req.guest?.id ?? ipKey(req),
+  message: 'Slow down a little. Try again in a few minutes.',
+});
+
+export const commentLimit = limiter('comment', {
+  windowMinutes: 10,
+  limit: 30,
+  key: (req) => req.guest?.id ?? ipKey(req),
+  message: "You're commenting very quickly. Try again in a few minutes.",
+});
+
 export const familyCodeLimit = limiter('family-code', {
   windowMinutes: 10,
   limit: 10,

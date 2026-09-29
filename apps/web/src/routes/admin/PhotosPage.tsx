@@ -1,7 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, Download, Eye, EyeOff, Loader2, Maximize2, Star, StarOff, Trash2 } from 'lucide-react';
+import {
+  CircleAlert,
+  Download,
+  Eye,
+  EyeOff,
+  Heart,
+  Loader2,
+  Maximize2,
+  MessageCircle,
+  Star,
+  StarOff,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdminPhoto, Page, PhotoAction } from '@wm/shared';
 import { Button } from '@/components/ui/button';
@@ -28,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { useAdminEventContext } from './hooks';
 import { PageHeader } from './PageHeader';
 import { useSelection } from './useSelection';
+import { CommentsModerationDrawer } from './CommentsModerationDrawer';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All photos' },
@@ -58,6 +71,7 @@ export function PhotosPage() {
   const selection = useSelection();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [commentsFor, setCommentsFor] = useState<AdminPhoto | null>(null);
 
   const list = useInfiniteQuery({
     queryKey: queryKeys.admin.photos(event.id, filters),
@@ -239,11 +253,30 @@ export function PhotosPage() {
                   <Maximize2 className="size-3.5" />
                 </button>
               )}
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                <button type="button" className="hover:underline" onClick={() => setFilter('guestId', p.guestId)}>
+              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left hover:underline"
+                  onClick={() => setFilter('guestId', p.guestId)}
+                >
                   {p.guestName}
                 </button>
-              </p>
+                {p.likeCount > 0 && (
+                  <span className="flex items-center gap-0.5" title={`${p.likeCount} likes`}>
+                    <Heart className="size-3 fill-red-500 text-red-500" /> {p.likeCount}
+                  </span>
+                )}
+                {p.commentCount > 0 && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-0.5 hover:text-foreground"
+                    title="Read and moderate comments"
+                    onClick={() => setCommentsFor(p)}
+                  >
+                    <MessageCircle className="size-3" /> {p.commentCount}
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}
@@ -258,6 +291,8 @@ export function PhotosPage() {
           No photos match these filters.
         </p>
       )}
+
+      <CommentsModerationDrawer photo={commentsFor} onClose={() => setCommentsFor(null)} />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

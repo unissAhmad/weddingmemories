@@ -191,7 +191,20 @@ export interface AdminPhoto {
   guestName: string;
   originalName: string | null;
   sizeBytes: number;
+  likeCount: number;
+  commentCount: number;
   takenAt: string | null;
+  createdAt: string;
+}
+
+export const AdminPhotoParamsSchema = EventIdParamsSchema.extend({ photoId: z.string().min(1).max(64) });
+export const AdminCommentParamsSchema = EventIdParamsSchema.extend({ commentId: z.string().min(1).max(64) });
+
+export interface AdminComment {
+  id: string;
+  guestId: string;
+  guestName: string;
+  body: string;
   createdAt: string;
 }
 

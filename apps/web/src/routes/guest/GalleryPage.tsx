@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Camera, Loader2, Sparkles } from 'lucide-react';
 import type { GalleryPhoto } from '@wm/shared';
@@ -7,6 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlurImage } from '@/components/gallery/BlurImage';
 import { Masonry } from '@/components/gallery/Masonry';
 import { useLightbox, type LightboxItem } from '@/components/gallery/useLightbox';
+import { PhotoActionBar, type SocialPanel } from '@/components/social/PhotoActionBar';
+import { SocialDrawer } from '@/components/social/SocialDrawer';
 import { useGallery } from '@/hooks/useGallery';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { useMe } from '@/hooks/useMe';
@@ -48,6 +50,11 @@ function Gallery() {
   const openHighlight = useLightbox(useMemo(() => highlights.map(toLightbox), [highlights]));
   const sentinel = useInfiniteScroll(loadMore, Boolean(all.hasNextPage) && !all.isFetchingNextPage);
   const ratio = useCallback((p: GalleryPhoto) => p.height / p.width, []);
+
+  // Which photo's likes/comments drawer is open. The photo is read from the live list, so
+  // counts in the drawer header stay in sync with the bar under the photo.
+  const [social, setSocial] = useState<{ photoId: string; panel: SocialPanel } | null>(null);
+  const socialPhoto = social ? (photos.find((p) => p.id === social.photoId) ?? null) : null;
 
   if (all.isError) {
     const revoked = isApiError(all.error, 'ACCESS_REQUIRED');
@@ -122,25 +129,35 @@ function Gallery() {
           getRatio={ratio}
           getKey={(p) => p.id}
           render={(p, i) => (
-            <button
-              type="button"
-              onClick={() => openAll(i)}
-              className="group animate-rise-in block w-full overflow-hidden rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              aria-label={`Open photo by ${p.guestName}`}
-            >
-              <BlurImage
-                src={p.thumbUrl}
-                blurhash={p.blurhash}
-                width={p.width}
-                height={p.height}
-                alt=""
-                className="w-full transition-transform duration-500 group-hover:scale-[1.02]"
-                style={{ aspectRatio: `${p.width} / ${p.height}` }}
-              />
-            </button>
+            <figure className="animate-rise-in">
+              <button
+                type="button"
+                onClick={() => openAll(i)}
+                className="group block w-full overflow-hidden rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                aria-label={`Open photo by ${p.guestName}`}
+              >
+                <BlurImage
+                  src={p.thumbUrl}
+                  blurhash={p.blurhash}
+                  width={p.width}
+                  height={p.height}
+                  alt=""
+                  className="w-full transition-transform duration-500 group-hover:scale-[1.02]"
+                  style={{ aspectRatio: `${p.width} / ${p.height}` }}
+                />
+              </button>
+              <PhotoActionBar photo={p} eventId={event.id} onOpen={(panel) => setSocial({ photoId: p.id, panel })} />
+            </figure>
           )}
         />
       )}
+
+      <SocialDrawer
+        photo={socialPhoto}
+        panel={social?.panel ?? 'likes'}
+        eventId={event.id}
+        onClose={() => setSocial(null)}
+      />
 
       <div ref={sentinel} aria-hidden />
       {all.isFetchingNextPage && <Loader2 className="mx-auto my-6 size-5 animate-spin text-muted-foreground" />}

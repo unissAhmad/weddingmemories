@@ -30,6 +30,10 @@ export interface GalleryPhoto {
   displayUrl: string;
   guestName: string;
   featured: boolean;
+  likeCount: number;
+  commentCount: number;
+  /** The signed-in guest has liked this photo */
+  likedByMe: boolean;
   takenAt: string | null;
   createdAt: string;
 }

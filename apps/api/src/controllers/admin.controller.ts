@@ -2,6 +2,8 @@ import type { RequestHandler } from 'express';
 import type { z } from 'zod';
 import type {
   AccessDecision,
+  AdminCommentParamsSchema,
+  AdminPhotoParamsSchema,
   AccessListQuery,
   AdminLogin,
   AdminPhotoQuery,
@@ -153,6 +155,17 @@ export const postPhotoAction: RequestHandler = async (req, res) => {
   res.json(
     await photos.applyPhotoAction(currentAdmin(req), currentEvent(req).id, req.valid.body as PhotoAction),
   );
+};
+
+export const getPhotoComments: RequestHandler = async (req, res) => {
+  const { photoId } = req.valid.params as z.infer<typeof AdminPhotoParamsSchema>;
+  res.json(await photos.listPhotoComments(currentEvent(req).id, photoId));
+};
+
+export const deletePhotoComment: RequestHandler = async (req, res) => {
+  const { commentId } = req.valid.params as z.infer<typeof AdminCommentParamsSchema>;
+  await photos.deleteComment(currentAdmin(req), currentEvent(req).id, commentId);
+  res.status(204).end();
 };
 
 /* Guests */

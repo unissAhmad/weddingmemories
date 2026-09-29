@@ -52,9 +52,11 @@ model Guest {
   blocked          Boolean     @default(false)
   createdAt        DateTime    @default(now())
 
-  event  Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  photos Photo[]
-  access AccessRequest?
+  event    Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  photos   Photo[]
+  access   AccessRequest?
+  likes    PhotoLike[]
+  comments PhotoComment[]
 
   @@unique([eventId, contact])
   @@unique([eventId, accessCodeLookup])
@@ -126,12 +128,40 @@ model Photo {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event    Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guest    Guest          @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  likes    PhotoLike[]
+  comments PhotoComment[]
 
   @@unique([eventId, sha256]) // dedupe
   @@index([eventId, status, createdAt])
   @@index([guestId, createdAt])
+}
+
+/// One guest liking one photo (a guest can like a photo once).
+model PhotoLike {
+  photoId   String
+  guestId   String
+  createdAt DateTime @default(now())
+
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@id([photoId, guestId])
+  @@index([photoId, createdAt])
+}
+
+model PhotoComment {
+  id        String   @id @default(cuid())
+  photoId   String
+  guestId   String
+  body      String
+  createdAt DateTime @default(now())
+
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  guest Guest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([photoId, createdAt])
 }
 
 enum AdminRole {

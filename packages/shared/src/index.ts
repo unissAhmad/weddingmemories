@@ -6,4 +6,5 @@ export * from './photos';
 export * from './pagination';
 export * from './access';
 export * from './accessCode';
+export * from './social';
 export * from './admin';

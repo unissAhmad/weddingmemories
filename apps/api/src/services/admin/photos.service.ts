@@ -1,10 +1,12 @@
-import { TRANSFORMS, type AdminPhoto, type AdminPhotoQuery, type Page, type PhotoAction } from '@wm/shared';
+import { TRANSFORMS, type AdminComment, type AdminPhoto, type AdminPhotoQuery, type Page, type PhotoAction } from '@wm/shared';
 import type { Prisma } from '@wm/db';
 import { prisma } from '../../lib/prisma';
 import { afterCursor, newestFirst, toPage } from '../../lib/cursor';
 import { deliveryUrl } from '../../lib/cloudinary';
 import { audit } from '../../lib/audit';
 import type { AdminCtx } from '../../middleware/requireAdmin';
+import { notFound } from '../../lib/errors';
+import { visibleGuest } from '../social.service';
 
 export async function listPhotos(eventId: string, query: AdminPhotoQuery): Promise<Page<AdminPhoto>> {
   const createdAt: Prisma.DateTimeFilter = {};
@@ -26,7 +28,10 @@ export async function listPhotos(eventId: string, query: AdminPhotoQuery): Promi
     },
     orderBy: newestFirst,
     take: query.limit + 1,
-    include: { guest: { select: { name: true } } },
+    include: {
+      guest: { select: { name: true } },
+      _count: { select: { likes: { where: visibleGuest }, comments: { where: visibleGuest } } },
+    },
   });
 
   const { page, nextCursor } = toPage(rows, query.limit);
@@ -45,6 +50,8 @@ export async function listPhotos(eventId: string, query: AdminPhotoQuery): Promi
       guestName: p.guest.name,
       originalName: p.originalName,
       sizeBytes: p.sizeBytes,
+      likeCount: p._count.likes,
+      commentCount: p._count.comments,
       takenAt: p.takenAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
     };
@@ -84,4 +91,40 @@ export async function applyPhotoAction(admin: AdminCtx, eventId: string, input: 
     return r;
   });
   return { updated: result.count };
+}
+
+/* Comment moderation */
+
+export async function listPhotoComments(eventId: string, photoId: string): Promise<AdminComment[]> {
+  const photo = await prisma.photo.findFirst({ where: { id: photoId, eventId }, select: { id: true } });
+  if (!photo) throw notFound('Photo');
+  const comments = await prisma.photoComment.findMany({
+    where: { photoId },
+    orderBy: { createdAt: 'asc' },
+    include: { guest: { select: { name: true } } },
+  });
+  return comments.map((c) => ({
+    id: c.id,
+    guestId: c.guestId,
+    guestName: c.guest.name,
+    body: c.body,
+    createdAt: c.createdAt.toISOString(),
+  }));
+}
+
+export async function deleteComment(admin: AdminCtx, eventId: string, commentId: string) {
+  const comment = await prisma.photoComment.findFirst({
+    where: { id: commentId, photo: { eventId } },
+    include: { guest: { select: { name: true } } },
+  });
+  if (!comment) throw notFound('Comment');
+  await prisma.photoComment.delete({ where: { id: comment.id } });
+  // Keep what was removed, so the audit log shows why.
+  await audit({
+    adminId: admin.id,
+    eventId,
+    action: 'comment.delete',
+    targetId: comment.photoId,
+    meta: { guest: comment.guest.name, body: comment.body.slice(0, 200) },
+  });
 }
