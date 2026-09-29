@@ -8,7 +8,8 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json",
-    "loadtest": "tsx --env-file-if-exists=../../.env scripts/loadtest.ts"
+    "loadtest": "tsx --env-file-if-exists=../../.env scripts/loadtest.ts",
+    "admin": "tsx --env-file-if-exists=../../.env scripts/admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1140.0",

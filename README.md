@@ -49,6 +49,17 @@ The admin panel lives at `/admin`. Sign in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN
 first sign-in shows a QR code to set up an authenticator app (Google Authenticator, 1Password…).
 If an admin loses their phone, an owner can reset their 2FA under **Team**.
 
+**Locked out?** An owner can reset another admin's 2FA under **Team**. If no owner can sign in
+(for example a lost phone), run these from your computer; they use `DATABASE_URL` in `.env`:
+
+```bash
+pnpm admin list                              # admins and their 2FA status
+pnpm admin reset-2fa <login>                 # next sign-in shows a new QR code
+pnpm admin set-password <login> <password>   # change a password
+```
+
+Tip: add a second owner, so each of you can reset the other from the panel.
+
 | Role | Can |
 |---|---|
 | Owner | Everything, on every event |
