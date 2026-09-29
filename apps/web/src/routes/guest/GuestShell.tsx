@@ -3,6 +3,7 @@ import { Camera, Images, LogOut, Users } from 'lucide-react';
 import type { GuestMe } from '@wm/shared';
 import { Button } from '@/components/ui/button';
 import { FullPageSpinner } from '@/components/FullPageSpinner';
+import { MadeBy } from '@/components/MadeBy';
 import { useLogout, useMe } from '@/hooks/useMe';
 import { cn } from '@/lib/utils';
 import { useEventContext } from './EventLayout';
@@ -44,6 +45,10 @@ export function GuestShell() {
       </header>
 
       <Outlet context={{ event, me: me.data } satisfies GuestContext} />
+
+      <footer className="mt-16 px-5">
+        <MadeBy />
+      </footer>
 
       <nav
         className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pt-2 backdrop-blur sm:hidden"

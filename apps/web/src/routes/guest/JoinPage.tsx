@@ -24,6 +24,7 @@ import { api, isApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useMe } from '@/hooks/useMe';
 import { useEventContext } from './EventLayout';
+import { MadeBy } from '@/components/MadeBy';
 
 const DetailsSchema = z.object({ name: GuestNameSchema, email: GuestEmailSchema });
 type DetailsInput = z.input<typeof DetailsSchema>;
@@ -81,6 +82,7 @@ export function JoinPage() {
             <DetailsStep onSent={setDetails} />
           ))}
       </div>
+      <MadeBy className="mt-auto pt-10" />
     </main>
   );
 }

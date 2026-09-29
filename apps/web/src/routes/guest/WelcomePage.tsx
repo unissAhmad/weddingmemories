@@ -6,6 +6,7 @@ import { HeroSlideshow } from '@/components/welcome/HeroSlideshow';
 import { Countdown } from '@/components/welcome/Countdown';
 import { Reveal } from '@/components/welcome/Reveal';
 import { JoinBar } from '@/components/welcome/JoinBar';
+import { MadeBy } from '@/components/MadeBy';
 import { Masonry } from '@/components/gallery/Masonry';
 import { useLightbox } from '@/components/gallery/useLightbox';
 import { useMe } from '@/hooks/useMe';
@@ -155,6 +156,7 @@ export function WelcomePage({ event }: { event: PublicEvent }) {
         <Ornament />
         <p className="mt-6 font-serif text-3xl">{event.name}</p>
         <p className="mt-2 text-sm text-muted-foreground">{date}</p>
+        <MadeBy className="mt-10" />
       </footer>
 
       <JoinBar slug={event.slug} signedIn={signedIn} />
