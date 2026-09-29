@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
-import { Camera, Loader2, Sparkles } from 'lucide-react';
-import type { GalleryPhoto } from '@wm/shared';
+import { Camera, Clock, Flame, Heart, Loader2, Sparkles } from 'lucide-react';
+import type { GalleryPhoto, GallerySort } from '@wm/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BlurImage } from '@/components/gallery/BlurImage';
@@ -13,6 +14,7 @@ import { useGallery } from '@/hooks/useGallery';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { useMe } from '@/hooks/useMe';
 import { isApiError } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useGuestContext } from './GuestShell';
 import { AccessGate } from './AccessGate';
 
@@ -34,12 +36,32 @@ export function GalleryPage() {
   return <Gallery />;
 }
 
+const TABS: { id: GallerySort; label: string; icon: React.ReactNode; hint: string }[] = [
+  { id: 'latest', label: 'Latest', icon: <Clock />, hint: 'Newest first' },
+  { id: 'liked', label: 'Most liked', icon: <Heart />, hint: 'Ranked by likes' },
+  { id: 'trending', label: 'Trending', icon: <Flame />, hint: 'Ranked by comments' },
+];
+
+const EMPTY: Record<Exclude<GallerySort, 'latest'>, { title: string; body: string }> = {
+  liked: { title: 'No likes yet', body: 'Tap the ♥ under a photo you love, and it will show up here.' },
+  trending: { title: 'No conversations yet', body: 'Comment on a photo to start one; the most talked-about rise to the top.' },
+};
+
+const RANK_STYLES = ['bg-[#d4af37] text-black', 'bg-[#c0c0c0] text-black', 'bg-[#cd7f32] text-white'];
+
 function Gallery() {
   const { event } = useGuestContext();
-  const all = useGallery(event.id);
-  const featured = useGallery(event.id, { featured: true });
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.find((t) => t.id === params.get('tab'))?.id ?? 'latest';
+  const ranked = tab !== 'latest';
+  const all = useGallery(event.id, { sort: tab });
+  const featured = useGallery(event.id, { featured: true, enabled: !ranked });
 
-  const photos = useMemo(() => all.data?.pages.flatMap((p) => p.items) ?? [], [all.data]);
+  // Rankings can shift between pages while people react; never show a photo twice.
+  const photos = useMemo(() => {
+    const seen = new Set<string>();
+    return (all.data?.pages.flatMap((p) => p.items) ?? []).filter((p) => !seen.has(p.id) && seen.add(p.id));
+  }, [all.data]);
   const highlights = useMemo(() => featured.data?.pages.flatMap((p) => p.items) ?? [], [featured.data]);
 
   const loadMore = useCallback(() => {
@@ -72,12 +94,38 @@ function Gallery() {
 
   return (
     <main className="mx-auto max-w-5xl px-3 pt-8 sm:px-5">
-      <div className="mb-8 px-2 text-center">
+      <div className="mb-6 px-2 text-center">
         <p className="eyebrow">The gallery</p>
         <h1 className="mt-2 text-4xl sm:text-5xl">Every moment, together</h1>
       </div>
 
-      {highlights.length > 0 && (
+      {/* Tabs, pinned under the header while scrolling */}
+      <div className="sticky top-14 z-20 -mx-3 mb-6 bg-background/85 px-3 py-2 backdrop-blur sm:mx-0 sm:px-0">
+        <div role="tablist" aria-label="Sort photos" className="mx-auto grid max-w-md grid-cols-3 gap-1 rounded-full border bg-card p-1 shadow-xs">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              type="button"
+              aria-selected={tab === t.id}
+              onClick={() => {
+                setParams(t.id === 'latest' ? {} : { tab: t.id }, { replace: true });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={cn(
+                'flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-xs font-medium transition-colors sm:text-sm [&_svg]:size-3.5',
+                tab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {ranked && <p className="mt-2 text-center text-xs text-muted-foreground">{TABS.find((t) => t.id === tab)!.hint}</p>}
+      </div>
+
+      {!ranked && highlights.length > 0 && (
         <section className="mb-10" aria-labelledby="highlights">
           <h2 id="highlights" className="mb-3 flex items-center gap-2 px-2 text-xl">
             <Sparkles className="size-4 text-accent" /> Highlights
@@ -113,6 +161,14 @@ function Gallery() {
             <Skeleton key={i} style={{ aspectRatio: `1 / ${r}` }} />
           ))}
         </div>
+      ) : photos.length === 0 && ranked ? (
+        <div className="mx-auto max-w-sm rounded-xl border border-dashed p-8 text-center">
+          <p className="font-serif text-xl">{EMPTY[tab].title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{EMPTY[tab].body}</p>
+          <Button variant="outline" className="mt-5" onClick={() => setParams({}, { replace: true })}>
+            <Clock /> See the latest photos
+          </Button>
+        </div>
       ) : photos.length === 0 ? (
         <div className="mx-auto max-w-sm rounded-xl border border-dashed p-8 text-center">
           <p className="font-serif text-xl">No photos yet</p>
@@ -133,9 +189,20 @@ function Gallery() {
               <button
                 type="button"
                 onClick={() => openAll(i)}
-                className="group block w-full overflow-hidden rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="group relative block w-full overflow-hidden rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 aria-label={`Open photo by ${p.guestName}`}
               >
+                {ranked && i < 3 && (
+                  <span
+                    className={cn(
+                      'absolute top-2 left-2 z-10 flex size-7 items-center justify-center rounded-full font-sans text-xs font-bold tabular-nums shadow-md ring-2 ring-white/70',
+                      RANK_STYLES[i],
+                    )}
+                    aria-label={`Number ${i + 1}`}
+                  >
+                    {i + 1}
+                  </span>
+                )}
                 <BlurImage
                   src={p.thumbUrl}
                   blurhash={p.blurhash}

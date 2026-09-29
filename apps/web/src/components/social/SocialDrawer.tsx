@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn, timeAgo } from '@/lib/utils';
-import { patchGalleryPhoto } from './cache';
+import { markRankingsStale, patchGalleryPhoto } from './cache';
 import type { SocialPanel } from './PhotoActionBar';
 
 interface SocialDrawerProps {
@@ -131,6 +131,7 @@ function Comments({ photo, eventId }: { photo: GalleryPhoto; eventId: string }) 
     onSuccess: (comment) => {
       qc.setQueryData<PhotoCommentItem[]>(key, (list) => [...(list ?? []), comment]);
       patchGalleryPhoto(qc, eventId, photo.id, (p) => ({ commentCount: p.commentCount + 1 }));
+      markRankingsStale(qc, eventId);
       form.reset({ body: '' });
     },
     onError: (err) => toast.error(err.message),
@@ -141,6 +142,7 @@ function Comments({ photo, eventId }: { photo: GalleryPhoto; eventId: string }) 
     onSuccess: (_r, id) => {
       qc.setQueryData<PhotoCommentItem[]>(key, (list) => list?.filter((c) => c.id !== id));
       patchGalleryPhoto(qc, eventId, photo.id, (p) => ({ commentCount: Math.max(0, p.commentCount - 1) }));
+      markRankingsStale(qc, eventId);
     },
     onError: (err) => toast.error(err.message),
   });

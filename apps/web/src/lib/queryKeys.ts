@@ -1,9 +1,13 @@
+import type { GallerySort } from '@wm/shared';
+
 export const queryKeys = {
   event: (slug: string) => ['event', slug] as const,
   homeEvent: ['event', 'home'] as const,
   me: ['guest', 'me'] as const,
   myPhotos: (eventId: string) => ['photos', 'mine', eventId] as const,
-  gallery: (eventId: string, featured = false) => ['photos', 'gallery', eventId, { featured }] as const,
+  gallery: (eventId: string, featured = false, sort: GallerySort = 'latest') =>
+    ['photos', 'gallery', eventId, { featured, sort }] as const,
+  galleryAll: (eventId: string) => ['photos', 'gallery', eventId] as const,
 
   admin: {
     me: ['admin', 'me'] as const,

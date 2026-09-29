@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import type { GalleryPhoto, LikeState } from '@wm/shared';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { patchGalleryPhoto } from './cache';
+import { markRankingsStale, patchGalleryPhoto } from './cache';
 
 export type SocialPanel = 'likes' | 'comments';
 
@@ -38,7 +38,10 @@ export function PhotoActionBar({ photo, eventId, onOpen }: PhotoActionBarProps) 
       if (before) patchGalleryPhoto(qc, eventId, photo.id, () => ({ likedByMe: before.liked, likeCount: before.count }));
       toast.error(err.message);
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: ['photos', 'likes', photo.id] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['photos', 'likes', photo.id] });
+      markRankingsStale(qc, eventId);
+    },
   });
 
   const onHeart = () => {

@@ -10,7 +10,12 @@ export type FamilyCode = z.infer<typeof FamilyCodeSchema>;
 export const AccessStateSchema = z.object({ status: AccessStatusSchema });
 export type AccessState = z.infer<typeof AccessStateSchema>;
 
+/** latest = newest first; liked = most likes first; trending = most comments first. */
+export const GALLERY_SORTS = ['latest', 'liked', 'trending'] as const;
+export type GallerySort = (typeof GALLERY_SORTS)[number];
+
 export const GalleryQuerySchema = z.object({
+  sort: z.enum(GALLERY_SORTS).default('latest'),
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(60).default(30),
   featured: z

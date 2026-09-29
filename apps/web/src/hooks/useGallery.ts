@@ -1,14 +1,18 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import type { GalleryPhoto, Page } from '@wm/shared';
+import type { GalleryPhoto, GallerySort, Page } from '@wm/shared';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 
-export function useGallery(eventId: string, opts: { featured?: boolean; enabled?: boolean } = {}) {
+export function useGallery(
+  eventId: string,
+  opts: { featured?: boolean; sort?: GallerySort; enabled?: boolean } = {},
+) {
   const featured = opts.featured ?? false;
+  const sort = opts.sort ?? 'latest';
   return useInfiniteQuery({
-    queryKey: queryKeys.gallery(eventId, featured),
+    queryKey: queryKeys.gallery(eventId, featured, sort),
     queryFn: ({ pageParam, signal }) => {
-      const qs = new URLSearchParams({ limit: featured ? '20' : '30' });
+      const qs = new URLSearchParams({ limit: featured ? '20' : '30', sort });
       if (featured) qs.set('featured', 'true');
       if (pageParam) qs.set('cursor', pageParam);
       return api<Page<GalleryPhoto>>(`/photos?${qs}`, { signal });

@@ -190,18 +190,44 @@ export async function listMyPhotos(guest: GuestCtx, query: CursorQuery): Promise
   return { items, nextCursor };
 }
 
+/**
+ * Ranked tabs page by position: counts change while people browse, so a date cursor doesn't
+ * apply. The cursor is "o:<offset>".
+ */
+function rankedOrder(sort: 'liked' | 'trending'): Prisma.PhotoOrderByWithRelationInput[] {
+  const newest: Prisma.PhotoOrderByWithRelationInput[] = [{ createdAt: 'desc' }, { id: 'desc' }];
+  return sort === 'liked'
+    ? [{ likes: { _count: 'desc' } }, ...newest]
+    : [{ comments: { _count: 'desc' } }, { likes: { _count: 'desc' } }, ...newest];
+}
+
+function parseOffset(cursor?: string) {
+  if (!cursor) return 0;
+  const n = Number(/^o:(\d+)$/.exec(cursor)?.[1]);
+  if (!Number.isInteger(n) || n < 0) throw new AppError(400, 'BAD_REQUEST', 'Invalid cursor');
+  return n;
+}
+
 /** The shared gallery: READY photos only, resized renditions only, never originals. */
 export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise<Page<GalleryPhoto>> {
   await assertGalleryAccess(guest);
+
+  const ranked = !query.featured && query.sort !== 'latest';
+  const sort = query.sort as 'liked' | 'trending';
+  const offset = ranked ? parseOffset(query.cursor) : 0;
 
   const rows = await prisma.photo.findMany({
     where: {
       eventId: guest.eventId,
       status: 'READY',
       ...(query.featured ? { featured: true } : {}),
-      ...afterCursor(query.cursor),
+      // Ranked tabs only list photos someone has reacted to.
+      ...(ranked && sort === 'liked' ? { likes: { some: visibleGuest } } : {}),
+      ...(ranked && sort === 'trending' ? { comments: { some: visibleGuest } } : {}),
+      ...(ranked ? {} : afterCursor(query.cursor)),
     },
-    orderBy: newestFirst,
+    orderBy: ranked ? rankedOrder(sort) : newestFirst,
+    ...(ranked ? { skip: offset } : {}),
     take: query.limit + 1,
     include: {
       guest: { select: { name: true } },
@@ -210,7 +236,9 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
     },
   });
 
-  const { page, nextCursor } = toPage(rows, query.limit);
+  const { page, nextCursor: dateCursor } = toPage(rows, query.limit);
+  const nextCursor = ranked ? (rows.length > query.limit ? `o:${offset + query.limit}` : null) : dateCursor;
+
   const items = page.map((p) => ({
     id: p.id,
     width: p.width ?? 1600,
