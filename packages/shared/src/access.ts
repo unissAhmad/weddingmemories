@@ -18,6 +18,8 @@ export const GalleryQuerySchema = z.object({
   sort: z.enum(GALLERY_SORTS).default('latest'),
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(60).default(30),
+  /** Only this guest's photos (a friend's page) */
+  guestId: z.string().min(1).max(64).optional(),
   featured: z
     .enum(['true', 'false'])
     .optional()

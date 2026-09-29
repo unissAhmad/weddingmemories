@@ -1,5 +1,5 @@
 import { Link, NavLink, Navigate, Outlet, useOutletContext } from 'react-router';
-import { Camera, Images, LogOut } from 'lucide-react';
+import { Camera, Images, LogOut, Users } from 'lucide-react';
 import type { GuestMe } from '@wm/shared';
 import { Button } from '@/components/ui/button';
 import { FullPageSpinner } from '@/components/FullPageSpinner';
@@ -28,6 +28,7 @@ export function GuestShell() {
           <nav className="hidden items-center gap-1 sm:flex" aria-label="Sections">
             <TabLink to="upload" icon={<Camera />} label="Share" />
             <TabLink to="gallery" icon={<Images />} label="Gallery" />
+            <TabLink to="friends" icon={<Users />} label="Friends" />
           </nav>
           <Button
             variant="ghost"
@@ -48,9 +49,10 @@ export function GuestShell() {
         className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pt-2 backdrop-blur sm:hidden"
         aria-label="Sections"
       >
-        <div className="mx-auto grid max-w-md grid-cols-2 px-6">
+        <div className="mx-auto grid max-w-md grid-cols-3 px-6">
           <BottomTab to="upload" icon={<Camera />} label="Share" />
           <BottomTab to="gallery" icon={<Images />} label="Gallery" />
+          <BottomTab to="friends" icon={<Users />} label="Friends" />
         </div>
       </nav>
     </div>

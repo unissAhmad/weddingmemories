@@ -11,6 +11,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { eventsRouter } from './routes/events.routes';
 import { guestRouter } from './routes/guest.routes';
 import { photosRouter } from './routes/photos.routes';
+import { friendsRouter } from './routes/friends.routes';
 import { accessRouter } from './routes/access.routes';
 import { adminRouter } from './routes/admin.routes';
 import { downloadsRouter } from './routes/downloads.routes';
@@ -42,6 +43,7 @@ export function createApp() {
   app.use('/api/events', eventsRouter);
   app.use('/api/guest', guestRouter);
   app.use('/api/photos', photosRouter);
+  app.use('/api/friends', friendsRouter);
   app.use('/api/access', accessRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/downloads', downloadsRouter);

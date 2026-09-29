@@ -5,15 +5,17 @@ import { queryKeys } from '@/lib/queryKeys';
 
 export function useGallery(
   eventId: string,
-  opts: { featured?: boolean; sort?: GallerySort; enabled?: boolean } = {},
+  opts: { featured?: boolean; sort?: GallerySort; guestId?: string; enabled?: boolean } = {},
 ) {
   const featured = opts.featured ?? false;
   const sort = opts.sort ?? 'latest';
+  const guestId = opts.guestId ?? null;
   return useInfiniteQuery({
-    queryKey: queryKeys.gallery(eventId, featured, sort),
+    queryKey: queryKeys.gallery(eventId, featured, sort, guestId),
     queryFn: ({ pageParam, signal }) => {
       const qs = new URLSearchParams({ limit: featured ? '20' : '30', sort });
       if (featured) qs.set('featured', 'true');
+      if (guestId) qs.set('guestId', guestId);
       if (pageParam) qs.set('cursor', pageParam);
       return api<Page<GalleryPhoto>>(`/photos?${qs}`, { signal });
     },

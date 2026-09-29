@@ -15,6 +15,12 @@ const UploadPage = lazy(() =>
 const GalleryPage = lazy(() =>
   import('./routes/guest/GalleryPage').then((m) => ({ default: m.GalleryPage })),
 );
+const FriendsPage = lazy(() =>
+  import('./routes/guest/FriendsPage').then((m) => ({ default: m.FriendsPage })),
+);
+const FriendPhotosPage = lazy(() =>
+  import('./routes/guest/FriendPhotosPage').then((m) => ({ default: m.FriendPhotosPage })),
+);
 const AdminApp = lazy(() => import('./routes/admin/AdminApp'));
 
 export function App() {
@@ -29,6 +35,8 @@ export function App() {
             <Route element={<GuestShell />}>
               <Route path="upload" element={<UploadPage />} />
               <Route path="gallery" element={<GalleryPage />} />
+              <Route path="friends" element={<FriendsPage />} />
+              <Route path="friends/:guestId" element={<FriendPhotosPage />} />
             </Route>
           </Route>
           <Route path="/admin/*" element={<AdminApp />} />

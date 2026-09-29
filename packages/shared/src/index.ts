@@ -8,3 +8,4 @@ export * from './access';
 export * from './accessCode';
 export * from './social';
 export * from './admin';
+export * from './friends';

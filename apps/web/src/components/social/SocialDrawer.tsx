@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn, timeAgo } from '@/lib/utils';
+import { Avatar } from './Avatar';
 import { markRankingsStale, patchGalleryPhoto } from './cache';
 import type { SocialPanel } from './PhotoActionBar';
 
@@ -47,25 +48,6 @@ function PhotoPeek({ photo }: { photo: GalleryPhoto }) {
       width={44}
       height={44}
     />
-  );
-}
-
-/** Soft, stable colour per name for the initials avatar. */
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-  const hue = [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
-  return (
-    <span
-      className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-      style={{ background: `hsl(${hue} 32% 52%)` }}
-      aria-hidden
-    >
-      {initials || '?'}
-    </span>
   );
 }
 

@@ -5,9 +5,11 @@ export const queryKeys = {
   homeEvent: ['event', 'home'] as const,
   me: ['guest', 'me'] as const,
   myPhotos: (eventId: string) => ['photos', 'mine', eventId] as const,
-  gallery: (eventId: string, featured = false, sort: GallerySort = 'latest') =>
-    ['photos', 'gallery', eventId, { featured, sort }] as const,
+  gallery: (eventId: string, featured = false, sort: GallerySort = 'latest', guestId: string | null = null) =>
+    ['photos', 'gallery', eventId, { featured, sort, guestId }] as const,
   galleryAll: (eventId: string) => ['photos', 'gallery', eventId] as const,
+  friends: (eventId: string) => ['photos', 'friends', eventId] as const,
+  friend: (eventId: string, guestId: string) => ['photos', 'friends', eventId, guestId] as const,
 
   admin: {
     me: ['admin', 'me'] as const,

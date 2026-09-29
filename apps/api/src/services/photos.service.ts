@@ -201,12 +201,38 @@ function rankedOrder(sort: 'liked' | 'trending'): Prisma.PhotoOrderByWithRelatio
     : [{ comments: { _count: 'desc' } }, { likes: { _count: 'desc' } }, ...newest];
 }
 
-function parseOffset(cursor?: string) {
+export function parseOffset(cursor?: string) {
   if (!cursor) return 0;
   const n = Number(/^o:(\d+)$/.exec(cursor)?.[1]);
   if (!Number.isInteger(n) || n < 0) throw new AppError(400, 'BAD_REQUEST', 'Invalid cursor');
   return n;
 }
+
+/** What the gallery needs to load for each photo, for the signed-in guest. */
+export const galleryInclude = (guestId: string) =>
+  ({
+    guest: { select: { name: true } },
+    _count: { select: { likes: { where: visibleGuest }, comments: { where: visibleGuest } } },
+    likes: { where: { guestId }, select: { guestId: true }, take: 1 },
+  }) satisfies Prisma.PhotoInclude;
+
+type GalleryRow = Prisma.PhotoGetPayload<{ include: ReturnType<typeof galleryInclude> }>;
+
+export const toGalleryPhoto = (p: GalleryRow): GalleryPhoto => ({
+  id: p.id,
+  width: p.width ?? 1600,
+  height: p.height ?? 1200,
+  blurhash: p.blurhash,
+  thumbUrl: deliveryUrl(p.publicId, TRANSFORMS.thumb),
+  displayUrl: deliveryUrl(p.publicId, TRANSFORMS.display),
+  guestName: p.guest.name,
+  featured: p.featured,
+  likeCount: p._count.likes,
+  commentCount: p._count.comments,
+  likedByMe: p.likes.length > 0,
+  takenAt: p.takenAt?.toISOString() ?? null,
+  createdAt: p.createdAt.toISOString(),
+});
 
 /** The shared gallery: READY photos only, resized renditions only, never originals. */
 export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise<Page<GalleryPhoto>> {
@@ -221,6 +247,7 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
       eventId: guest.eventId,
       status: 'READY',
       ...(query.featured ? { featured: true } : {}),
+      ...(query.guestId ? { guestId: query.guestId } : {}),
       // Ranked tabs only list photos someone has reacted to.
       ...(ranked && sort === 'liked' ? { likes: { some: visibleGuest } } : {}),
       ...(ranked && sort === 'trending' ? { comments: { some: visibleGuest } } : {}),
@@ -229,31 +256,10 @@ export async function listGallery(guest: GuestCtx, query: GalleryQuery): Promise
     orderBy: ranked ? rankedOrder(sort) : newestFirst,
     ...(ranked ? { skip: offset } : {}),
     take: query.limit + 1,
-    include: {
-      guest: { select: { name: true } },
-      _count: { select: { likes: { where: visibleGuest }, comments: { where: visibleGuest } } },
-      likes: { where: { guestId: guest.id }, select: { guestId: true }, take: 1 },
-    },
+    include: galleryInclude(guest.id),
   });
 
   const { page, nextCursor: dateCursor } = toPage(rows, query.limit);
   const nextCursor = ranked ? (rows.length > query.limit ? `o:${offset + query.limit}` : null) : dateCursor;
-
-  const items = page.map((p) => ({
-    id: p.id,
-    width: p.width ?? 1600,
-    height: p.height ?? 1200,
-    blurhash: p.blurhash,
-    thumbUrl: deliveryUrl(p.publicId, TRANSFORMS.thumb),
-    displayUrl: deliveryUrl(p.publicId, TRANSFORMS.display),
-    guestName: p.guest.name,
-    featured: p.featured,
-    likeCount: p._count.likes,
-    commentCount: p._count.comments,
-    likedByMe: p.likes.length > 0,
-    takenAt: p.takenAt?.toISOString() ?? null,
-    createdAt: p.createdAt.toISOString(),
-  }));
-
-  return { items, nextCursor };
+  return { items: page.map(toGalleryPhoto), nextCursor };
 }
