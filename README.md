@@ -20,9 +20,10 @@ dry run with the client.
 
 | Area | What's there |
 |---|---|
+| Welcome page | The site root (`/`) welcomes guests: full-screen slideshow of the couple's photos, greeting, personal message, countdown, "how it works", "Our moments" gallery, and an always-visible **Join & share photos** button. Four themes: Ivory & Gold, Blush Rose, Sage Garden, Midnight |
 | Guests | Email code sign-in, resumable uploads, My uploads, gallery with masonry + lightbox + highlights |
 | Access | Two ways in: **personal access code** (name + code from the invitation, no email, gallery open at once) or **email** → request → admin approval; plus auto-approve and a shared family code |
-| Admin | Password + TOTP 2FA, access queue, photo moderation, guests, settings, cover, QR, ZIP downloads, audit log, team |
+| Admin | Password + TOTP 2FA, access queue, photo moderation, guests, **Welcome page** (photos, greeting, message, venue, theme), settings, QR, ZIP downloads, audit log, team |
 | Storage | Cloudinary, private ("authenticated") assets; every image URL is signed for one exact size |
 | Jobs | Photo processing, ZIPs streamed on demand in ~2 GB parts, cleanup (deletes removed photos from Cloudinary after 7 days, clears abandoned uploads, requeues stuck photos) |
 

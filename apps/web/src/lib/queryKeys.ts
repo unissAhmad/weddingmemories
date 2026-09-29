@@ -1,5 +1,6 @@
 export const queryKeys = {
   event: (slug: string) => ['event', slug] as const,
+  homeEvent: ['event', 'home'] as const,
   me: ['guest', 'me'] as const,
   myPhotos: (eventId: string) => ['photos', 'mine', eventId] as const,
   gallery: (eventId: string, featured = false) => ['photos', 'gallery', eventId, { featured }] as const,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AccessStatusSchema } from './guest';
 import { PhotoStatusSchema } from './photos';
-import { SlugSchema } from './event';
+import { SlugSchema, THEMES, type ShowcaseItem } from './event';
 import { PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX } from './constants';
 
 /* ----------------------------------------------------------------------------
@@ -52,7 +52,7 @@ export interface AdminEventSummary {
 
 export const CreateEventSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  slug: SlugSchema,
+  slug: SlugSchema.refine((s) => s !== 'home', 'That link is reserved'),
   date: z.iso.datetime({ offset: true }).or(z.iso.date()),
 });
 export type CreateEvent = z.infer<typeof CreateEventSchema>;
@@ -66,15 +66,22 @@ export const UpdateEventSchema = z
     moderateBeforePublish: z.boolean(),
     /** A new family code, or null to remove it. */
     familyCode: z.string().trim().min(4, 'At least 4 characters').max(64).nullable(),
-    coverPublicId: z.string().max(300).nullable(),
+    theme: z.enum(THEMES),
+    greeting: z.string().trim().max(120).nullable(),
+    welcomeMessage: z.string().trim().max(2000).nullable(),
+    venue: z.string().trim().max(200).nullable(),
   })
   .partial();
 export type UpdateEvent = z.infer<typeof UpdateEventSchema>;
 
 export interface AdminEventDetail extends AdminEventSummary {
-  coverUrl: string | null;
   guestUrl: string;
+  venue: string | null;
+  greeting: string | null;
+  welcomeMessage: string | null;
+  showcase: ShowcaseItem[];
   settings: {
+    theme: (typeof THEMES)[number];
     uploadsOpen: boolean;
     autoApprove: boolean;
     moderateBeforePublish: boolean;
@@ -82,21 +89,41 @@ export interface AdminEventDetail extends AdminEventSummary {
   };
 }
 
-export const CoverUploadSchema = z.object({
-  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  size: z
-    .number()
-    .int()
-    .positive()
-    .max(10 * 1024 * 1024),
-});
-export type CoverUpload = z.infer<typeof CoverUploadSchema>;
+/* Welcome-page photos */
 
-export interface CoverUploadResponse {
+export const MAX_SHOWCASE_PHOTOS = 30;
+
+export const ShowcaseUploadSchema = z.object({
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']),
+  size: z.number().int().positive(),
+});
+export type ShowcaseUpload = z.infer<typeof ShowcaseUploadSchema>;
+
+export interface ShowcaseUploadResponse {
   publicId: string;
   uploadUrl: string;
   params: Record<string, string>;
 }
+
+/** Cloudinary's signed upload response, sent back to register the photo. */
+export const ShowcaseAddSchema = z.object({
+  public_id: z.string().min(1).max(300),
+  version: z.union([z.number(), z.string()]).transform(String),
+  signature: z.string().min(10).max(128),
+});
+export type ShowcaseAdd = z.infer<typeof ShowcaseAddSchema>;
+
+export const ShowcaseIdParamsSchema = EventIdParamsSchema.extend({ photoId: z.string().min(1).max(64) });
+
+export const ShowcaseUpdateSchema = z.object({
+  caption: z.string().trim().max(200).nullable(),
+});
+export type ShowcaseUpdate = z.infer<typeof ShowcaseUpdateSchema>;
+
+export const ShowcaseReorderSchema = z.object({
+  ids: z.array(z.string().min(1).max(64)).min(1).max(100),
+});
+export type ShowcaseReorder = z.infer<typeof ShowcaseReorderSchema>;
 
 export interface EventStats {
   guests: number;

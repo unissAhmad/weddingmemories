@@ -9,6 +9,7 @@ import { PhotosPage } from './PhotosPage';
 import { GuestsPage } from './GuestsPage';
 import { DownloadsPage } from './DownloadsPage';
 import { SettingsPage } from './SettingsPage';
+import { WelcomeSettingsPage } from './WelcomeSettingsPage';
 import { AuditPage } from './AuditPage';
 import { TeamPage } from './TeamPage';
 
@@ -26,6 +27,7 @@ export default function AdminApp() {
           <Route path="photos" element={<PhotosPage />} />
           <Route path="guests" element={<GuestsPage />} />
           <Route path="downloads" element={<DownloadsPage />} />
+          <Route path="welcome" element={<WelcomeSettingsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="audit" element={<AuditPage />} />
         </Route>

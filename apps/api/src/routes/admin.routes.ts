@@ -6,7 +6,6 @@ import {
   AdminLoginSchema,
   AdminPhotoQuerySchema,
   AuditQuerySchema,
-  CoverUploadSchema,
   CreateAdminSchema,
   CreateCodeGuestsSchema,
   CreateDownloadSchema,
@@ -15,6 +14,11 @@ import {
   GuestListQuerySchema,
   GuestUpdateSchema,
   PhotoActionSchema,
+  ShowcaseAddSchema,
+  ShowcaseIdParamsSchema,
+  ShowcaseReorderSchema,
+  ShowcaseUpdateSchema,
+  ShowcaseUploadSchema,
   TotpCodeSchema,
   UpdateEventSchema,
 } from '@wm/shared';
@@ -59,7 +63,17 @@ adminRouter.use('/events/:eventId', requireEventAccess, event);
 
 event.get('/', c.getEvent);
 event.patch('/', requireOwner, validate({ body: UpdateEventSchema }), c.patchEvent);
-event.post('/cover', requireOwner, validate({ body: CoverUploadSchema }), c.postCoverUpload);
+// Welcome page photos (owner only, like the rest of the event's settings)
+event.post('/showcase/upload', requireOwner, validate({ body: ShowcaseUploadSchema }), c.postShowcaseUpload);
+event.post('/showcase', requireOwner, validate({ body: ShowcaseAddSchema }), c.postShowcase);
+event.post('/showcase/reorder', requireOwner, validate({ body: ShowcaseReorderSchema }), c.postShowcaseReorder);
+event.patch(
+  '/showcase/:photoId',
+  requireOwner,
+  validate({ params: ShowcaseIdParamsSchema, body: ShowcaseUpdateSchema }),
+  c.patchShowcase,
+);
+event.delete('/showcase/:photoId', requireOwner, validate({ params: ShowcaseIdParamsSchema }), c.deleteShowcase);
 event.get('/stats', c.getStats);
 event.get('/qr', c.getQr);
 

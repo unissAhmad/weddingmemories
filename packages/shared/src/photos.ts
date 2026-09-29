@@ -73,7 +73,7 @@ export interface PhotoProcessJob {
 export const publicIds = {
   original: (folder: string, eventId: string, photoId: string) =>
     `${folder}/events/${eventId}/originals/${photoId}`,
-  cover: (folder: string, eventId: string, id: string) => `${folder}/events/${eventId}/cover/${id}`,
+  showcase: (folder: string, eventId: string, id: string) => `${folder}/events/${eventId}/showcase/${id}`,
 };
 
 /**
@@ -84,7 +84,12 @@ export const publicIds = {
 export const TRANSFORMS = {
   thumb: 'c_limit,w_400/f_auto,q_auto',
   display: 'c_limit,w_1600/f_auto,q_auto',
-  cover: 'c_limit,w_2000/f_auto,q_auto',
+  /** Welcome page: full-screen hero slideshow and lightbox */
+  showcase: 'c_limit,w_2000/f_auto,q_auto',
+  /** Welcome page: "Our moments" grid */
+  showcaseThumb: 'c_limit,w_900/f_auto,q_auto',
+  /** Tiny blurred placeholder shown while a welcome photo loads */
+  placeholder: 'c_limit,w_48/e_blur:600/f_auto,q_auto:low',
   /** Tiny JPEG used by the worker to compute the blurhash. */
   tiny: 'c_limit,w_32,h_32/f_jpg,q_70',
   /** JSON describing the display rendition (its final, rotated dimensions). */

@@ -1,12 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
 import {
-  TRANSFORMS,
   parseEventSettings,
-  publicIds,
   type AdminEventDetail,
   type AdminEventSummary,
-  type CoverUpload,
   type CreateEvent,
   type EventStats,
   type UpdateEvent,
@@ -14,9 +10,9 @@ import {
 import { Prisma, prisma } from '../../lib/prisma';
 import { AppError, notFound } from '../../lib/errors';
 import { hashSecret } from '../../lib/secrets';
-import { deliveryUrl, signUpload } from '../../lib/cloudinary';
 import { audit } from '../../lib/audit';
-import { env, guestEventUrl } from '../../env';
+import { guestEventUrl } from '../../env';
+import { listShowcase } from '../showcase.service';
 import type { AdminCtx } from '../../middleware/requireAdmin';
 
 const summary = (e: { id: string; slug: string; name: string; date: Date }): AdminEventSummary => ({
@@ -61,9 +57,13 @@ export async function getEventDetail(eventId: string): Promise<AdminEventDetail>
   const settings = parseEventSettings(event.settings);
   return {
     ...summary(event),
-    coverUrl: event.coverPublicId ? deliveryUrl(event.coverPublicId, TRANSFORMS.cover) : null,
     guestUrl: guestEventUrl(event.slug),
+    venue: event.venue,
+    greeting: event.greeting,
+    welcomeMessage: event.welcomeMessage,
+    showcase: await listShowcase(event.id),
     settings: {
+      theme: settings.theme,
       uploadsOpen: settings.uploadsOpen,
       autoApprove: settings.autoApprove,
       moderateBeforePublish: settings.moderateBeforePublish,
@@ -76,13 +76,10 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw notFound('Event');
 
-  if (input.coverPublicId && !input.coverPublicId.startsWith(publicIds.cover(env.CLOUDINARY_FOLDER, eventId, ''))) {
-    throw new AppError(400, 'BAD_REQUEST', 'Invalid cover image');
-  }
-
   const settings = parseEventSettings(event.settings);
   const next = {
     ...settings,
+    ...(input.theme !== undefined && { theme: input.theme }),
     ...(input.uploadsOpen !== undefined && { uploadsOpen: input.uploadsOpen }),
     ...(input.autoApprove !== undefined && { autoApprove: input.autoApprove }),
     ...(input.moderateBeforePublish !== undefined && {
@@ -99,7 +96,9 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
       settings: next,
       ...(input.name !== undefined && { name: input.name }),
       ...(input.date !== undefined && { date: new Date(input.date) }),
-      ...(input.coverPublicId !== undefined && { coverPublicId: input.coverPublicId }),
+      ...(input.venue !== undefined && { venue: input.venue || null }),
+      ...(input.greeting !== undefined && { greeting: input.greeting || null }),
+      ...(input.welcomeMessage !== undefined && { welcomeMessage: input.welcomeMessage || null }),
     },
   });
 
@@ -108,12 +107,6 @@ export async function updateEvent(admin: AdminCtx, eventId: string, input: Updat
   await audit({ adminId: admin.id, eventId, action: 'event.update', targetId: eventId, meta: { changed } });
 
   return getEventDetail(eventId);
-}
-
-/** Signed upload for a new cover image; the admin then saves the returned public id. */
-export function createCoverUpload(eventId: string, _input: CoverUpload) {
-  const publicId = publicIds.cover(env.CLOUDINARY_FOLDER, eventId, randomUUID());
-  return { publicId, ...signUpload(publicId, { formats: 'jpg,jpeg,png,webp' }) };
 }
 
 export async function getStats(eventId: string): Promise<EventStats> {

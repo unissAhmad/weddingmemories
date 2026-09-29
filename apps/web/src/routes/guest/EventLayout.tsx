@@ -1,6 +1,7 @@
 import { Outlet, useOutletContext, useParams } from 'react-router';
 import type { PublicEvent } from '@wm/shared';
 import { useEvent } from '@/hooks/useEvent';
+import { useEventTheme } from '@/hooks/useEventTheme';
 import { isApiError } from '@/lib/api';
 import { rememberEvent } from '@/lib/lastEvent';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { FullPageSpinner } from '@/components/FullPageSpinner';
 export function EventLayout() {
   const { slug = '' } = useParams();
   const event = useEvent(slug);
+  useEventTheme(event.data?.theme);
 
   if (event.isPending) return <FullPageSpinner />;
 

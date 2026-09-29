@@ -30,6 +30,7 @@ describe('Cloudinary ids and upload results', () => {
 describe('parseEventSettings', () => {
   it('fills defaults for empty settings', () => {
     expect(parseEventSettings({})).toEqual({
+      theme: 'ivory',
       autoApprove: false,
       moderateBeforePublish: false,
       uploadsOpen: true,

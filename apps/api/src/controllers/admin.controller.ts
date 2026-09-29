@@ -6,7 +6,6 @@ import type {
   AdminLogin,
   AdminPhotoQuery,
   AdminIdParamsSchema,
-  CoverUpload,
   CreateAdmin,
   CreateCodeGuests,
   CreateEvent,
@@ -15,6 +14,10 @@ import type {
   GuestListQuery,
   GuestUpdate,
   PhotoAction,
+  ShowcaseAdd,
+  ShowcaseIdParamsSchema,
+  ShowcaseReorder,
+  ShowcaseUpdate,
   TotpCode,
   UpdateEvent,
 } from '@wm/shared';
@@ -35,6 +38,7 @@ import * as guests from '../services/admin/guests.service';
 import * as downloads from '../services/admin/downloads.service';
 import * as team from '../services/admin/team.service';
 import { createCodeGuests, resetAccessCode } from '../services/accessCode.service';
+import * as showcase from '../services/showcase.service';
 
 /* Auth */
 
@@ -84,8 +88,33 @@ export const patchEvent: RequestHandler = async (req, res) => {
   res.json(await events.updateEvent(currentAdmin(req), event.id, req.valid.body as UpdateEvent));
 };
 
-export const postCoverUpload: RequestHandler = async (req, res) => {
-  res.json(await events.createCoverUpload(currentEvent(req).id, req.valid.body as CoverUpload));
+/* Welcome page photos */
+
+type ShowcaseParams = z.infer<typeof ShowcaseIdParamsSchema>;
+
+export const postShowcaseUpload: RequestHandler = async (req, res) => {
+  res.json(await showcase.createShowcaseUpload(currentEvent(req).id));
+};
+
+export const postShowcase: RequestHandler = async (req, res) => {
+  res.status(201).json(await showcase.addShowcasePhoto(currentAdmin(req), currentEvent(req).id, req.valid.body as ShowcaseAdd));
+};
+
+export const patchShowcase: RequestHandler = async (req, res) => {
+  const { photoId } = req.valid.params as ShowcaseParams;
+  const { caption } = req.valid.body as ShowcaseUpdate;
+  res.json(await showcase.updateShowcaseCaption(currentAdmin(req), currentEvent(req).id, photoId, caption));
+};
+
+export const postShowcaseReorder: RequestHandler = async (req, res) => {
+  const { ids } = req.valid.body as ShowcaseReorder;
+  res.json(await showcase.reorderShowcase(currentAdmin(req), currentEvent(req).id, ids));
+};
+
+export const deleteShowcase: RequestHandler = async (req, res) => {
+  const { photoId } = req.valid.params as ShowcaseParams;
+  await showcase.deleteShowcasePhoto(currentAdmin(req), currentEvent(req).id, photoId);
+  res.status(204).end();
 };
 
 export const getStats: RequestHandler = async (req, res) => {

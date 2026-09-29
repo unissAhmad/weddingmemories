@@ -22,6 +22,65 @@
   --ring: #a88a5e;
 }
 
+/*
+ * Guest-page themes, chosen per event in the admin panel (Welcome page → Theme).
+ * EventLayout sets <html data-theme="…">; the admin panel always uses the default.
+ */
+[data-theme='blush'] {
+  --background: #fbf5f3;
+  --foreground: #3a2a2c;
+  --card: #fffaf8;
+  --card-foreground: #3a2a2c;
+  --muted: #f4e8e5;
+  --muted-foreground: #87706f;
+  --primary: #6f3f48;
+  --primary-foreground: #fff8f6;
+  --secondary: #f5e6e2;
+  --secondary-foreground: #6f3f48;
+  --accent: #c0848b;
+  --accent-foreground: #fffaf8;
+  --border: #eedcd8;
+  --input: #e6cfcb;
+  --ring: #c0848b;
+}
+
+[data-theme='sage'] {
+  --background: #f5f6f0;
+  --foreground: #283028;
+  --card: #fbfcf8;
+  --card-foreground: #283028;
+  --muted: #e8ece0;
+  --muted-foreground: #6b7466;
+  --primary: #3c5040;
+  --primary-foreground: #f6f7f1;
+  --secondary: #e6eadd;
+  --secondary-foreground: #3c5040;
+  --accent: #869866;
+  --accent-foreground: #fbfcf8;
+  --border: #dde2d3;
+  --input: #d2d9c6;
+  --ring: #869866;
+}
+
+[data-theme='midnight'] {
+  --background: #11141f;
+  --foreground: #f0e9dd;
+  --card: #181c2b;
+  --card-foreground: #f0e9dd;
+  --muted: #20253a;
+  --muted-foreground: #a6a3ad;
+  --primary: #d8b67b;
+  --primary-foreground: #14172a;
+  --secondary: #232941;
+  --secondary-foreground: #f0e9dd;
+  --accent: #d8b67b;
+  --accent-foreground: #14172a;
+  --border: #2b3149;
+  --input: #363d59;
+  --ring: #d8b67b;
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -106,6 +165,61 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-rise-in {
+    animation: none;
+  }
+}
+
+/* Welcome page */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ken-burns {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+  }
+}
+@utility animate-ken-burns {
+  animation: ken-burns 9s ease-out both;
+}
+@keyframes soft-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility animate-soft-fade-up {
+  animation: soft-fade-up 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes cue-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+}
+@utility animate-cue {
+  animation: cue-bounce 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns,
+  .animate-soft-fade-up,
+  .animate-cue {
     animation: none;
   }
 }

@@ -8,6 +8,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  Sparkles,
   UserCheck,
   Users,
 } from 'lucide-react';
@@ -78,6 +79,7 @@ export function AdminShell() {
               <Item to={`/admin/e/${eventId}/guests`} icon={<Users />} label="Guests" />
               {isOwner && (
                 <>
+                  <Item to={`/admin/e/${eventId}/welcome`} icon={<Sparkles />} label="Welcome page" />
                   <Item to={`/admin/e/${eventId}/downloads`} icon={<Download />} label="Downloads" />
                   <Item to={`/admin/e/${eventId}/settings`} icon={<Settings />} label="Settings" />
                   <Item to={`/admin/e/${eventId}/audit`} icon={<ClipboardList />} label="Audit log" />

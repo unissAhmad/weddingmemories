@@ -9,18 +9,22 @@ datasource db {
 }
 
 model Event {
-  id            String   @id @default(cuid())
-  slug          String   @unique // used in QR URL: /e/:slug
-  name          String
-  date          DateTime
-  /// Cloudinary public_id of the cover image
-  coverPublicId String?
+  id             String   @id @default(cuid())
+  slug           String   @unique // used in QR URL: /e/:slug
+  name           String
+  date           DateTime
+  /// Short line above the names on the welcome page, e.g. "Welcome to the wedding of"
+  greeting       String?
+  /// A personal note from the couple to their guests
+  welcomeMessage String?
+  venue          String?
   /// Parsed with EventSettingsSchema from @wm/shared
-  settings      Json     @default("{}")
-  createdAt     DateTime @default(now())
+  settings       Json     @default("{}")
+  createdAt      DateTime @default(now())
 
   guests       Guest[]
   photos       Photo[]
+  showcase     ShowcasePhoto[]
   otpCodes     OtpCode[]
   admins       EventAdmin[]
   downloadJobs DownloadJob[]
@@ -159,6 +163,24 @@ model EventAdmin {
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@id([adminId, eventId])
+}
+
+/// Photos the couple chooses for the welcome page (slideshow + "Our moments").
+model ShowcasePhoto {
+  id        String   @id @default(cuid())
+  eventId   String
+  /// Cloudinary public_id (authenticated asset)
+  publicId  String
+  /// Display size after EXIF rotation, for layout without shifting
+  width     Int?
+  height    Int?
+  caption   String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, position])
 }
 
 /// A download request: a snapshot of photo ids, streamed as ZIP parts on demand.
