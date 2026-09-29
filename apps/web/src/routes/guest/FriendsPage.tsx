@@ -95,6 +95,15 @@ function Friends() {
 
 const FROM_LIST = { fromFriends: true };
 
+/**
+ * Explicit width from the photo's shape. Without it, some mobile browsers size the slide to the
+ * image's full pixel width and leave a gap beside it.
+ */
+const slideSize = (p: { width: number; height: number }): React.CSSProperties => ({
+  height: 'var(--slide-h)',
+  width: `min(calc(var(--slide-h) * ${(p.width / p.height).toFixed(4)}), 75vw)`,
+});
+
 function FriendRow({ friend }: { friend: FriendWithPreview }) {
   const open = useLightbox(useMemo(() => friend.preview.map(toLightbox), [friend.preview]));
   const more = friend.photoCount - friend.preview.length;
@@ -135,8 +144,8 @@ function FriendRow({ friend }: { friend: FriendWithPreview }) {
                 width={p.width}
                 height={p.height}
                 alt=""
-                className="h-44 max-w-[75vw] object-cover sm:h-52"
-                style={{ aspectRatio: `${p.width} / ${p.height}` }}
+                className="[--slide-h:11rem] sm:[--slide-h:13rem]"
+                style={slideSize(p)}
               />
             </button>
           </li>

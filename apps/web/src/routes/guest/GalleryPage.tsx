@@ -128,8 +128,10 @@ function Gallery() {
                     width={p.width}
                     height={p.height}
                     alt=""
-                    className="h-52 sm:h-64"
-                    style={{ aspectRatio: `${p.width} / ${p.height}` }}
+                    className="h-(--h) [--h:13rem] sm:[--h:16rem]"
+                    // Explicit width: some mobile browsers otherwise size the slide to the
+                    // image's full pixel width and leave a gap beside it.
+                    style={{ width: `min(calc(var(--h) * ${(p.width / p.height).toFixed(4)}), 85vw)` }}
                   />
                 </button>
               </li>
